@@ -1,5 +1,6 @@
 """Tests for input and output guardrails."""
-from datetime import datetime, timezone
+
+from datetime import UTC, datetime
 
 from ielts_ai.guardrails.input_checks import validate_input
 from ielts_ai.guardrails.output_checks import evidence_in_essay, validate_output
@@ -37,7 +38,9 @@ def test_output_checks_evidence() -> None:
 
     # Validate output check warnings
     crit = [
-        CriterionScore(criterion=Criterion.TR, band=6.5, comment="ok", evidence=["essential empathy"]),
+        CriterionScore(
+            criterion=Criterion.TR, band=6.5, comment="ok", evidence=["essential empathy"]
+        ),
         CriterionScore(criterion=Criterion.CC, band=6.0, comment="ok", evidence=["absent quote"]),
         CriterionScore(criterion=Criterion.LR, band=6.5, comment="ok", evidence=[]),
         CriterionScore(criterion=Criterion.GRA, band=6.0, comment="ok", evidence=[]),
@@ -49,7 +52,7 @@ def test_output_checks_evidence() -> None:
         warnings=[],
         retrieved_rubric=[],
         model="mock",
-        created_at=datetime.now(timezone.utc),
+        created_at=datetime.now(UTC),
     )
 
     warnings = validate_output(res, essay)

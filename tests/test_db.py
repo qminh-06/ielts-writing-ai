@@ -1,5 +1,7 @@
 """Tests for database operations and status transitions."""
+
 import pytest
+
 from ielts_ai.db.repo import create_essay, get_essay, init_db, set_status
 
 
