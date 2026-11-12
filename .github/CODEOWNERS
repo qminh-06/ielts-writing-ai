@@ -1,0 +1,11 @@
+# CODEOWNERS — map folders to roles
+/src/ielts_ai/agent/        @TODO-A
+/src/ielts_ai/rag/          @TODO-B
+/src/ielts_ai/guardrails/   @TODO-B
+/src/ielts_ai/db/           @TODO-C
+/src/ielts_ai/services/     @TODO-C
+/src/ielts_ai/observability/ @TODO-C
+/app/                       @TODO-D
+/evals/                     @TODO-E
+/tests/                     @TODO-E
+/docs/                      @TODO-E

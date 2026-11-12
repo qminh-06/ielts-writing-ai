@@ -1,0 +1,17 @@
+.env
+*.db
+.chroma/
+outbox/
+__pycache__/
+.venv/
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+dist/
+build/
+.eggs/
+*.pyc
+*.pyo
+*.pyd
+.DS_Store
+Thumbs.db
