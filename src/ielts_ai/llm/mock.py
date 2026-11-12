@@ -1,13 +1,15 @@
 """Mock LLM client for testing and development without real API calls."""
-import json
+
 import logging
 from pathlib import Path
 
-from ielts_ai.llm.base import LLMClient, LLMResponse
+from ielts_ai.llm.base import LLMResponse
 
 logger = logging.getLogger(__name__)
 
-_MOCK_DATA_PATH = Path(__file__).parent.parent.parent.parent / "data" / "samples" / "grading_result.mock.json"
+_MOCK_DATA_PATH = (
+    Path(__file__).parent.parent.parent.parent / "data" / "samples" / "grading_result.mock.json"
+)
 
 
 class MockLLMClient:
