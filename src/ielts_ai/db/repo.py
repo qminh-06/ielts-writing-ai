@@ -3,7 +3,7 @@
 All functions use plain sqlite3 (no ORM).
 Status transitions are enforced here; invalid transitions raise ValueError.
 """
-import json
+
 import logging
 import sqlite3
 from pathlib import Path
@@ -273,7 +273,5 @@ def list_llm_calls(db_path: str, essay_id: int | None = None) -> list[dict[str, 
                 (essay_id,),
             ).fetchall()
         else:
-            rows = conn.execute(
-                "SELECT * FROM llm_calls ORDER BY ts DESC"
-            ).fetchall()
+            rows = conn.execute("SELECT * FROM llm_calls ORDER BY ts DESC").fetchall()
     return [dict(r) for r in rows]

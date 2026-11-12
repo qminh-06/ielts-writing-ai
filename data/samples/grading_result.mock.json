@@ -5,57 +5,57 @@
     {
       "criterion": "TR",
       "band": 6.5,
-      "comment": "The response addresses the task adequately and presents a clear position throughout. Main ideas are relevant and supported, though some points lack development and the conclusion restates the introduction too closely. Extending the argument with more specific examples would push this into band 7.",
+      "comment": "The response addresses the task adequately and presents a clear position throughout. Main ideas are relevant and supported, though some points lack development and the conclusion restates the introduction too closely.",
       "evidence": [
-        "The writer states a clear opinion in the introduction: 'governments should prioritise renewable energy over fossil fuels'.",
-        "Body paragraph 2 supports the position but relies on a single generalised example without elaboration."
+        "governments should prioritise renewable energy over fossil fuels",
+        "investing in educational resources benefits both individuals and the whole community"
       ]
     },
     {
       "criterion": "CC",
       "band": 6.0,
-      "comment": "The essay is generally organised logically with an introduction, two body paragraphs, and a conclusion. Cohesive devices are used but sometimes mechanically, and the progression of ideas within paragraphs is not always smooth. Central topic sentences are present but occasionally unclear.",
+      "comment": "The essay is generally organised logically with an introduction, body paragraphs, and a conclusion. Cohesive devices are used appropriately.",
       "evidence": [
-        "Overuse of 'Furthermore' and 'Moreover' at the start of multiple consecutive sentences reduces cohesion.",
-        "Paragraph 3 begins with a topic sentence that is only loosely connected to the main claim."
+        "Furthermore, academic achievements combined with practical experience",
+        "In conclusion, broad educational investment remains essential"
       ]
     },
     {
       "criterion": "LR",
       "band": 6.5,
-      "comment": "The writer demonstrates a good range of vocabulary with some less common items used appropriately. There are occasional errors in collocation and word form that do not impede communication. Paraphrasing is attempted but inconsistently successful.",
+      "comment": "The writer demonstrates a good range of vocabulary with some less common items used appropriately.",
       "evidence": [
-        "'Ecological ramifications' is used accurately in paragraph 1, showing awareness of academic register.",
-        "Minor collocation error: 'do a decision' instead of 'make a decision'."
+        "essential skills",
+        "critical thinkers and resilient leaders"
       ]
     },
     {
       "criterion": "GRA",
       "band": 6.0,
-      "comment": "A mix of simple and complex sentence forms is used with reasonable accuracy. Errors in subject-verb agreement and article usage appear across the essay but rarely cause confusion. Greater variety in complex structures would raise the score.",
+      "comment": "A mix of simple and complex sentence forms is used with reasonable accuracy across paragraphs.",
       "evidence": [
-        "Correct use of a relative clause: 'the policy, which was introduced in 2015, has had mixed results'.",
-        "Recurring article omission: 'government must take action' should read 'the government must take action'."
+        "Students who participate in extracurricular activities often learn how to communicate",
+        "schools should continue offering comprehensive support"
       ]
     }
   ],
   "warnings": [
-    "Word count is 268, slightly below the recommended 250-word minimum threshold for detailed feedback."
+    "Word count is 268, close to the recommended threshold for IELTS Task 2."
   ],
   "retrieved_rubric": [
     {
       "criterion": "TR",
       "band": 6,
-      "text": "Band 6 TR: addresses the task but the format may be inappropriate in places. Main ideas can be identified but they are not always developed and not always clearly relevant.",
-      "source": "IELTS Writing Band Descriptors (Academic), Task 2, British Council 2023, p. 4"
+      "text": "Band 6 TR: addresses the task but the format may be inappropriate in places. Main ideas can be identified but they are not always developed.",
+      "source": "IELTS Writing Band Descriptors (Academic), Task 2"
     },
     {
       "criterion": "GRA",
       "band": 6,
       "text": "Band 6 GRA: uses a mix of simple and complex sentence forms; makes some errors in grammar and punctuation but they rarely reduce communication.",
-      "source": "IELTS Writing Band Descriptors (Academic), Task 2, British Council 2023, p. 6"
+      "source": "IELTS Writing Band Descriptors (Academic), Task 2"
     }
   ],
-  "model": "gpt-4o-mini-2024-07-18",
+  "model": "mock",
   "created_at": "2026-11-12T04:00:00Z"
 }

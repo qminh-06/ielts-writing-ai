@@ -1,16 +1,15 @@
 import math
 from datetime import datetime
 from enum import Enum
-from typing import Optional
 
 from pydantic import BaseModel, field_validator, model_validator
 
 
 class Criterion(str, Enum):
-    TR = "TR"   # Task Response
-    CC = "CC"   # Coherence & Cohesion
-    LR = "LR"   # Lexical Resource
-    GRA = "GRA" # Grammatical Range & Accuracy
+    TR = "TR"  # Task Response
+    CC = "CC"  # Coherence & Cohesion
+    LR = "LR"  # Lexical Resource
+    GRA = "GRA"  # Grammatical Range & Accuracy
 
 
 class EssayStatus(str, Enum):
@@ -31,7 +30,7 @@ class RubricChunk(BaseModel):
 
 class CriterionScore(BaseModel):
     criterion: Criterion
-    band: float   # 0-9, step 0.5
+    band: float  # 0-9, step 0.5
     comment: str
     evidence: list[str]
 
@@ -75,11 +74,11 @@ class GradingResult(BaseModel):
 
 class ReviewDecision(BaseModel):
     essay_id: int
-    final_bands: dict[Criterion, float]   # one per criterion
+    final_bands: dict[Criterion, float]  # one per criterion
     examiner_comment: str
-    action: str   # "accept" | "regrade"
-    regrade_criterion: Optional[Criterion] = None
-    regrade_feedback: Optional[str] = None
+    action: str  # "accept" | "regrade"
+    regrade_criterion: Criterion | None = None
+    regrade_feedback: str | None = None
 
     @model_validator(mode="after")
     def validate_regrade_fields(self) -> "ReviewDecision":

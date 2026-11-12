@@ -4,8 +4,9 @@ Supports:
 - file mode (EMAIL_MODE=file): writes mock .txt email files into outbox/
 - smtp mode (EMAIL_MODE=smtp): connects to real SMTP server (# TODO(C5))
 """
+
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from ielts_ai.config import get_settings
@@ -31,7 +32,7 @@ def send_email(
     if mode == "file":
         outbox = Path("outbox")
         outbox.mkdir(parents=True, exist_ok=True)
-        ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+        ts = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
         safe_to = to.replace("@", "_at_").replace(".", "_")
         filepath = outbox / f"{ts}_{safe_to}.txt"
 
