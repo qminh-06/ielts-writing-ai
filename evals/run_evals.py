@@ -106,8 +106,8 @@ def run_evals(provider: str = "mock") -> dict:
     print(f"{'4. Guardrail Pass Rate (stub)':<32} | {guardrail_stub * 100:.1f}%")
     print("=" * 54)
 
-    # Save to evals/results/day3.json
-    output_path = results_dir / "day3.json"
+    # Save to evals/results/eval_results.json
+    output_path = results_dir / "eval_results.json"
     with open(output_path, "w", encoding="utf-8") as f:
         json.dump(metrics_summary, f, indent=2)
 
