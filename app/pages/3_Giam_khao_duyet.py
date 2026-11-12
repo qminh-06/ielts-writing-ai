@@ -1,4 +1,5 @@
 """Trang 3: Giám khảo kiểm tra, sửa điểm, re-grade hoặc phê duyệt."""
+
 import streamlit as st
 
 from ielts_ai.schemas import Criterion, ReviewDecision
@@ -42,7 +43,11 @@ with tab1:
             )
         with col2:
             cc_band = st.number_input(
-                "Coherence & Cohesion (CC)", 0.0, 9.0, float(c_bands.get(Criterion.CC, 6.0)), step=0.5
+                "Coherence & Cohesion (CC)",
+                0.0,
+                9.0,
+                float(c_bands.get(Criterion.CC, 6.0)),
+                step=0.5,
             )
         with col3:
             lr_band = st.number_input(
@@ -50,7 +55,11 @@ with tab1:
             )
         with col4:
             gra_band = st.number_input(
-                "Grammatical Range (GRA)", 0.0, 9.0, float(c_bands.get(Criterion.GRA, 6.0)), step=0.5
+                "Grammatical Range (GRA)",
+                0.0,
+                9.0,
+                float(c_bands.get(Criterion.GRA, 6.0)),
+                step=0.5,
             )
 
         comment = st.text_area(

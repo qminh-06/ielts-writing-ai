@@ -1,4 +1,5 @@
 """Trang 5: Nhật ký quan sát cuộc gọi AI (Observability / Call logs)."""
+
 import pandas as pd
 import streamlit as st
 
@@ -29,6 +30,19 @@ col3.metric("Tỷ lệ lỗi (%)", f"{error_rate:.1f}%")
 
 st.subheader("Chi tiết từng cuộc gọi:")
 st.dataframe(
-    df[["id", "ts", "essay_id", "step", "latency_ms", "input_tokens", "output_tokens", "retries", "status", "error"]],
+    df[
+        [
+            "id",
+            "ts",
+            "essay_id",
+            "step",
+            "latency_ms",
+            "input_tokens",
+            "output_tokens",
+            "retries",
+            "status",
+            "error",
+        ]
+    ],
     use_container_width=True,
 )
