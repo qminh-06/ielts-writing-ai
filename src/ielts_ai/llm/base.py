@@ -1,11 +1,19 @@
 """LLM client protocol and response type."""
+
 from dataclasses import dataclass
 from typing import Protocol, runtime_checkable
+
+
+class LLMProviderError(Exception):
+    """Raised when an external LLM provider call fails."""
+
+    pass
 
 
 @dataclass
 class LLMResponse:
     """Response from an LLM call."""
+
     text: str
     input_tokens: int
     output_tokens: int

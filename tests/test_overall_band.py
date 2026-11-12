@@ -8,7 +8,8 @@ Rules:
   6.75 -> 7.0
   6.0  -> 6.0
 """
-from datetime import datetime, timezone
+
+from datetime import UTC, datetime
 
 from ielts_ai.schemas import Criterion, CriterionScore, GradingResult
 
@@ -27,7 +28,7 @@ def _make_result(bands: list[float]) -> GradingResult:
         warnings=[],
         retrieved_rubric=[],
         model="mock",
-        created_at=datetime.now(timezone.utc),
+        created_at=datetime.now(UTC),
     )
 
 

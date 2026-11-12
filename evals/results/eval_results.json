@@ -1,0 +1,9 @@
+{
+  "timestamp": "2026-11-12T18:25:20.496758+00:00",
+  "provider": "mock",
+  "sample_count": 10,
+  "schema_valid_rate": 1.0,
+  "evidence_valid_rate": 0.0,
+  "run_to_run_variance": 0.0,
+  "guardrail_pass_rate": 1.0
+}

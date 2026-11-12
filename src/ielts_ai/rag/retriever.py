@@ -4,6 +4,7 @@ Supports:
 - In-memory keyword fallback (USE_MOCK_RAG=true) for tests/CI without model downloads
 - ChromaDB persistent store for production (USE_MOCK_RAG=false)
 """
+
 import json
 import logging
 from pathlib import Path
@@ -13,6 +14,13 @@ from ielts_ai.config import get_settings
 from ielts_ai.schemas import Criterion, RubricChunk
 
 logger = logging.getLogger(__name__)
+
+
+class RubricIndexNotFoundError(Exception):
+    """Raised when the persistent ChromaDB rubric index is empty or missing."""
+
+    pass
+
 
 _DEFAULT_RUBRIC_FILE = (
     Path(__file__).parent.parent.parent.parent
@@ -49,7 +57,6 @@ def search_rubric_mock(
     chunks = _load_jsonl_chunks(rubric_path)
     filtered = [c for c in chunks if c.criterion == criterion]
     if not filtered:
-        # Fallback to any chunk for that criterion or generic placeholder
         return [
             RubricChunk(
                 criterion=criterion,
@@ -81,18 +88,29 @@ def search_rubric(
     Uses in-memory keyword matching if USE_MOCK_RAG=true (default),
     otherwise queries ChromaDB.
 
-    # TODO(B2): Implement ChromaDB querying when USE_MOCK_RAG=false.
+    Raises:
+        RubricIndexNotFoundError: If USE_MOCK_RAG=false and ChromaDB index is empty or missing.
     """
     settings = get_settings()
     if settings.use_mock_rag:
         return search_rubric_mock(criterion, query, top_k=top_k)
 
-    # TODO(B2): ChromaDB query implementation
     try:
         import chromadb
 
         client = chromadb.PersistentClient(path=settings.chroma_dir)
-        collection = client.get_or_create_collection("ielts_rubric")
+        try:
+            collection = client.get_collection("ielts_rubric")
+        except Exception as get_exc:
+            raise RubricIndexNotFoundError(
+                "Rubric index not found. Please run `make index` / `python scripts/build_rubric_index.py`."
+            ) from get_exc
+
+        if collection.count() == 0:
+            raise RubricIndexNotFoundError(
+                "Rubric index collection is empty. Please run `make index` / `python scripts/build_rubric_index.py`."
+            )
+
         results: Any = collection.query(
             query_texts=[query],
             n_results=top_k,
@@ -110,6 +128,10 @@ def search_rubric(
                     )
                 )
         return chunks if chunks else search_rubric_mock(criterion, query, top_k=top_k)
+    except RubricIndexNotFoundError:
+        raise
     except Exception as exc:
-        logger.warning("ChromaDB search failed, falling back to mock search: %s", exc)
-        return search_rubric_mock(criterion, query, top_k=top_k)
+        logger.error("ChromaDB search failed: %s", exc)
+        raise RubricIndexNotFoundError(
+            f"ChromaDB error ({exc}). Please run `make index` / `python scripts/build_rubric_index.py`."
+        ) from exc

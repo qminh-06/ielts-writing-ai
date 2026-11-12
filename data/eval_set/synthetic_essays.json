@@ -1,0 +1,82 @@
+[
+  {
+    "id": 1,
+    "topic": "Environmental Protection",
+    "prompt": "Some people believe that international cooperation is the only way to protect the environment, while others argue that national action is more effective. Discuss both views and give your opinion.",
+    "essay": "In the contemporary era, environmental degradation has escalated into an alarming crisis threatening global biodiversity. While some argue that local and national actions suffice, I firmly believe that international cooperation is indispensable for meaningful environmental preservation. First and foremost, climate issues transcend political borders, meaning cross-border cooperation is essential. Moreover, developing economies lack the modern technology required to transition to renewable energy without international subsidies. In conclusion, while individual countries must enforce regulations, coordinated global treaties represent the only viable path to planetary sustainability.",
+    "synthetic": true,
+    "reference_band": null
+  },
+  {
+    "id": 2,
+    "topic": "Higher Education",
+    "prompt": "University education should be free for all students regardless of their socioeconomic background. To what extent do you agree or disagree?",
+    "essay": "Tertiary education is increasingly regarded as a prerequisite for socioeconomic mobility in knowledge-driven economies. I completely agree with the viewpoint that tuition fees should be entirely abolished by governments. Ensuring equal educational opportunities democratizes the workforce and allows underprivileged talents to flourish. Furthermore, a highly educated populace enhances nationwide productivity and tax revenues in the long run. Consequently, government-funded higher education is an investment rather than an expenditure.",
+    "synthetic": true,
+    "reference_band": null
+  },
+  {
+    "id": 3,
+    "topic": "Remote Working",
+    "prompt": "More and more companies are allowing employees to work from home. Do the advantages of this trend outweigh the disadvantages?",
+    "essay": "The rapid advancement of digital communication tools has revolutionized modern employment practices, with remote working becoming commonplace across diverse industries. In my opinion, the advantages of telecommuting distinctly surpass the downsides. Firstly, eliminating daily commutes saves significant time and reduces urban traffic congestion. Secondly, remote work allows employees to achieve better work-life balance and schedule flexibility. Although lack of in-person collaboration can sometimes hinder corporate bonding, the overall benefits to wellbeing and environmental sustainability make remote work vastly superior.",
+    "synthetic": true,
+    "reference_band": null
+  },
+  {
+    "id": 4,
+    "topic": "Artificial Intelligence",
+    "prompt": "As artificial intelligence becomes more sophisticated, some fear it will replace human workers in many fields. Discuss advantages and disadvantages.",
+    "essay": "The unprecedented rise of automated intelligence and machine learning is reshaping the global labour market. While artificial intelligence enhances operational efficiency and eradicates monotonous tasks, it undeniably raises legitimate concerns regarding structural unemployment. Automated algorithms can analyze massive datasets without human error, yet creative problem solving and emotional empathy remain uniquely human traits. Therefore, governments must implement comprehensive upskilling programs to prepare the workforce for an AI-augmented future.",
+    "synthetic": true,
+    "reference_band": null
+  },
+  {
+    "id": 5,
+    "topic": "Healthcare Funding",
+    "prompt": "Governments should allocate more funds to preventive healthcare rather than treating illnesses after they occur. To what extent do you agree?",
+    "essay": "Public health expenditure is a subject of ongoing debate among health economists and policymakers. I strongly agree that prioritizing preventive medical measures yields vastly superior outcomes compared to curative treatments. Promoting healthy lifestyles and routine screenings mitigates chronic conditions such as cardiovascular disease and diabetes before expensive hospital interventions become necessary. In summary, prevention is far more cost-effective and ethically sound than treatment alone.",
+    "synthetic": true,
+    "reference_band": null
+  },
+  {
+    "id": 6,
+    "topic": "Urbanization and Cities",
+    "prompt": "Overcrowding in major cities is causing major social and infrastructural problems. What are the causes and what solutions can be proposed?",
+    "essay": "Metropolitan areas around the world are facing severe crises stemming from excessive population density. The primary driver of urbanization is the concentration of employment prospects and educational institutions in capital cities. To alleviate this strain, regional administrations should decentralize economic activities by investing in rural infrastructure and high-speed transit. In conclusion, balanced regional development is critical to restoring urban equilibrium.",
+    "synthetic": true,
+    "reference_band": null
+  },
+  {
+    "id": 7,
+    "topic": "Tourism Impact",
+    "prompt": "International tourism brings economic benefits but also causes cultural and environmental damage. Do benefits outweigh the drawbacks?",
+    "essay": "Mass international tourism has emerged as a major economic pillar for numerous developing nations. Despite generating substantial revenue and creating hospitality employment, unregulated travel frequently compromises fragile ecosystems and dilutes authentic indigenous traditions. In my perspective, the ecological toll often overshadows short-term financial gains unless sustainable tourism frameworks are rigorously enforced.",
+    "synthetic": true,
+    "reference_band": null
+  },
+  {
+    "id": 8,
+    "topic": "Traditional Culture vs Modernization",
+    "prompt": "Young people are increasingly losing interest in traditional culture and arts. What are the reasons and how can interest be revived?",
+    "essay": "In an increasingly globalized digital society, youth engagement with ancestral heritage and folk arts has witnessed a marked decline. This trend is largely attributable to the ubiquitous presence of modern social media and Western pop culture. To reignite youthful appreciation, schools and cultural centers should modernize cultural exhibitions through interactive digital media and gamified educational experiences.",
+    "synthetic": true,
+    "reference_band": null
+  },
+  {
+    "id": 9,
+    "topic": "Space Exploration",
+    "prompt": "Huge amounts of money are spent on space research while many people on Earth live in poverty. Is this expenditure justified?",
+    "essay": "Billions of dollars are allocated annually towards extraterrestrial missions and astrophysics research. While critics argue this capital would be better expended tackling terrestrial poverty and hunger, space technological innovations frequently yield transformative applications on Earth, including satellite communications, weather prediction, and advanced materials. Therefore, space exploration expenditure remains fully justifiable.",
+    "synthetic": true,
+    "reference_band": null
+  },
+  {
+    "id": 10,
+    "topic": "Consumerism",
+    "prompt": "We live in a throw-away society where people constantly buy new goods and discard old ones. What are the causes and consequences?",
+    "essay": "Modern consumer culture is characterized by rapid obsolescence and excessive disposable consumption. Aggressive commercial advertising coupled with the mass production of cheap goods compels consumers to replace functional items perpetually. The consequence is devastating landfill accumulation and environmental degradation. Collective shifts toward circular economies and mindful consumption are urgently required.",
+    "synthetic": true,
+    "reference_band": null
+  }
+]

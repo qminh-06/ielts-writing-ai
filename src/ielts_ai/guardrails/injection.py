@@ -6,6 +6,7 @@ instructions into the grading prompt.
 # TODO(B6): Implement robust injection detection (P1).
 # Current implementation: simple keyword list (intentionally minimal).
 """
+
 import logging
 
 logger = logging.getLogger(__name__)

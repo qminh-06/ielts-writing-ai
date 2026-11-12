@@ -23,3 +23,7 @@
 ## D6: Streamlit không có FastAPI
 **Quyết định:** Streamlit gọi trực tiếp service functions.
 **Lý do:** MVP 7 ngày; đủ cho demo; tránh thêm complexity và dependency.
+
+## D7: Google GenAI (Gemini SDK) làm Real LLM Provider
+**Quyết định:** Sử dụng thư viện `google-genai` làm SDK duy nhất cho `RealLLMClient`.
+**Lý do:** Hỗ trợ native JSON mode (`response_mime_type="application/json"`), tốc độ inference nhanh, phù hợp quy mô dự án và đáp ứng tiêu chí định dạng JSON có cấu trúc.

@@ -1,4 +1,5 @@
 """Review service handling human examiner decisions, score adjustments, regrades, and approval."""
+
 import json
 import logging
 from typing import Any
@@ -113,10 +114,10 @@ def approve_and_send(essay_id: int) -> dict[str, Any]:
     to_email = essay["candidate_email"]
     subject = f"Kết quả chấm điểm IELTS Writing Task 2 (Bài #{essay_id})"
     body = (
-        f"Kính gửi thí sinh,\n\n"
-        f"Bài viết của bạn đã được giám khảo chấm và phê duyệt.\n"
-        f"Chi tiết kết quả có thể tra cứu tại hệ thống.\n\n"
-        f"Trân trọng,\nIELTS Writing Assistant Team"
+        "Kính gửi thí sinh,\n\n"
+        "Bài viết của bạn đã được giám khảo chấm và phê duyệt.\n"
+        "Chi tiết kết quả có thể tra cứu tại hệ thống.\n\n"
+        "Trân trọng,\nIELTS Writing Assistant Team"
     )
 
     success = send_email(to=to_email, subject=subject, body=body, essay_id=essay_id)

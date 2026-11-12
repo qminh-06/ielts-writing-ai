@@ -5,6 +5,7 @@ Usage as context manager:
         result = llm_client.complete_json(system, user)
         ctx.set_tokens(result.input_tokens, result.output_tokens)
 """
+
 import logging
 import time
 from collections.abc import Generator

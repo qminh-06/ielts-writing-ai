@@ -1,4 +1,5 @@
 """Script to build persistent ChromaDB index from rubric JSONL files."""
+
 import sys
 from pathlib import Path
 
@@ -10,10 +11,7 @@ from ielts_ai.rag.indexer import build_index
 
 def main() -> None:
     rubric_file = (
-        Path(__file__).parent.parent
-        / "data"
-        / "rubric"
-        / "ielts_task2_band_descriptors.jsonl"
+        Path(__file__).parent.parent / "data" / "rubric" / "ielts_task2_band_descriptors.jsonl"
     )
     count = build_index(rubric_file)
     print(f"Successfully indexed {count} rubric items.")

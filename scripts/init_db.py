@@ -5,6 +5,7 @@ Usage:
     # or:
     make init-db
 """
+
 import sys
 from pathlib import Path
 
