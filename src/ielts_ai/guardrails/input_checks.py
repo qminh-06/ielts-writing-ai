@@ -2,17 +2,18 @@
 
 Checks run BEFORE the essay enters the grading pipeline.
 """
-import re
+
 import logging
+import re
 from dataclasses import dataclass, field
 
 logger = logging.getLogger(__name__)
 
 _EMAIL_RE = re.compile(r"^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$")
 
-MIN_CHARS = 100          # Hard minimum — below this is clearly not an essay
-MAX_CHARS = 10_000       # Hard maximum — prevents abuse
-WORD_COUNT_WARNING = 250 # IELTS Task 2 minimum is 250 words
+MIN_CHARS = 100  # Hard minimum — below this is clearly not an essay
+MAX_CHARS = 10_000  # Hard maximum — prevents abuse
+WORD_COUNT_WARNING = 250  # IELTS Task 2 minimum is 250 words
 
 
 @dataclass
@@ -22,6 +23,7 @@ class InputCheckResult:
     errors: Fatal problems — grading should NOT proceed.
     warnings: Non-fatal issues — grading proceeds but examiner is notified.
     """
+
     errors: list[str] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
 
@@ -52,9 +54,7 @@ def validate_input(essay_text: str, email: str) -> InputCheckResult:
     if not email or not email.strip():
         result.errors.append("Email không được để trống / Email is required.")
     elif not _EMAIL_RE.match(email.strip()):
-        result.errors.append(
-            f"Email không hợp lệ: {email!r} / Invalid email format: {email!r}"
-        )
+        result.errors.append(f"Email không hợp lệ: {email!r} / Invalid email format: {email!r}")
 
     # --- Essay text validation ---
     if not essay_text or not essay_text.strip():
@@ -84,6 +84,10 @@ def validate_input(essay_text: str, email: str) -> InputCheckResult:
 
     logger.debug(
         "Input check: email=%s, chars=%d, words=%d, errors=%d, warnings=%d",
-        email, char_count, word_count, len(result.errors), len(result.warnings),
+        email,
+        char_count,
+        word_count,
+        len(result.errors),
+        len(result.warnings),
     )
     return result

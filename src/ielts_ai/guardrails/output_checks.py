@@ -2,8 +2,9 @@
 
 Checks run AFTER the LLM returns a result, before saving to DB.
 """
-import re
+
 import logging
+import re
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -73,12 +74,11 @@ def check_evidence(result: "GradingResult", essay_text: str) -> list[str]:
     for cs in result.criteria:
         for ev in cs.evidence:
             if ev and not evidence_in_essay(ev, essay_text):
-                warnings.append(
-                    f"{cs.criterion.value}: evidence not found in essay: {ev!r}"
-                )
+                warnings.append(f"{cs.criterion.value}: evidence not found in essay: {ev!r}")
                 logger.warning(
                     "Evidence not found in essay — criterion=%s evidence=%r",
-                    cs.criterion.value, ev,
+                    cs.criterion.value,
+                    ev,
                 )
     return warnings
 

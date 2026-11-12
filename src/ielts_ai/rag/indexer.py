@@ -2,6 +2,7 @@
 
 # TODO(B2): Implement full chunking, embedding, and indexing logic.
 """
+
 import json
 import logging
 from pathlib import Path
@@ -46,11 +47,13 @@ def build_index(
                     continue
                 item = json.loads(line)
                 docs.append(item["text"])
-                metas.append({
-                    "criterion": item["criterion"],
-                    "band": int(item["band"]),
-                    "source": item.get("source", "official"),
-                })
+                metas.append(
+                    {
+                        "criterion": item["criterion"],
+                        "band": int(item["band"]),
+                        "source": item.get("source", "official"),
+                    }
+                )
                 ids.append(f"{item['criterion']}_band_{item['band']}_{i}")
                 count += 1
 
