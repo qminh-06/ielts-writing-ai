@@ -17,13 +17,26 @@ CREATE TABLE IF NOT EXISTS ai_results (
     result_json TEXT NOT NULL,
     created_at  TEXT NOT NULL DEFAULT (datetime('now'))
 );
+CREATE UNIQUE INDEX IF NOT EXISTS idx_ai_results_essay_version
+    ON ai_results (essay_id, version);
 
 CREATE TABLE IF NOT EXISTS reviews (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
     essay_id        INTEGER NOT NULL REFERENCES essays(id),
     final_bands_json TEXT NOT NULL,
     examiner_comment TEXT NOT NULL,
-    approved_at     TEXT NOT NULL DEFAULT (datetime('now'))
+    approved_at     TEXT,
+    action          TEXT NOT NULL DEFAULT 'accept'
+);
+
+CREATE TABLE IF NOT EXISTS regrade_requests (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    essay_id INTEGER NOT NULL REFERENCES essays(id),
+    criterion TEXT NOT NULL,
+    feedback TEXT NOT NULL,
+    from_version INTEGER NOT NULL,
+    to_version INTEGER NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
 CREATE TABLE IF NOT EXISTS emails (

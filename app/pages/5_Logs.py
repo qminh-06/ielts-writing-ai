@@ -1,48 +1,31 @@
-"""Trang 5: Nhật ký quan sát cuộc gọi AI (Observability / Call logs)."""
+"""Trang 5: Tóm tắt nhật ký lời gọi AI và truy xuất."""
 
 import pandas as pd
 import streamlit as st
 
-from ielts_ai.config import get_settings
-from ielts_ai.db.repo import list_llm_calls
+from ielts_ai.services.grading_service import get_all_essays
+from ielts_ai.services.metrics_service import get_call_metrics
 
 st.set_page_config(page_title="Nhật ký hệ thống - IELTS AI", page_icon="📈", layout="wide")
-st.header("📈 Bước 5: Nhật ký & Độ trễ mô hình (Observability)")
-
-settings = get_settings()
-calls = list_llm_calls(settings.db_path)
-
-if not calls:
-    st.info("Chưa có bản ghi nhật ký LLM call nào.")
-    st.stop()
-
-df = pd.DataFrame(calls)
-
-col1, col2, col3 = st.columns(3)
-total_calls = len(df)
-avg_latency = df["latency_ms"].mean()
-error_count = len(df[df["status"] != "ok"])
-error_rate = (error_count / total_calls) * 100 if total_calls > 0 else 0.0
-
-col1.metric("Tổng số cuộc gọi LLM", total_calls)
-col2.metric("Độ trễ trung bình (ms)", f"{avg_latency:.1f} ms")
-col3.metric("Tỷ lệ lỗi (%)", f"{error_rate:.1f}%")
-
-st.subheader("Chi tiết từng cuộc gọi:")
-st.dataframe(
-    df[
-        [
-            "id",
-            "ts",
-            "essay_id",
-            "step",
-            "latency_ms",
-            "input_tokens",
-            "output_tokens",
-            "retries",
-            "status",
-            "error",
-        ]
-    ],
-    use_container_width=True,
+st.header("Bước 5: Nhật ký và độ trễ mô hình")
+essay_options = [None] + [item["id"] for item in get_all_essays()]
+selected = st.selectbox(
+    "Lọc theo bài viết",
+    essay_options,
+    format_func=lambda value: "Tất cả" if value is None else str(value),
 )
+metrics = get_call_metrics(selected)
+col1, col2, col3 = st.columns(3)
+col1.metric("Tổng số lời gọi", metrics["total_calls"])
+col2.metric("Độ trễ trung bình", f"{metrics['average_latency_ms']:.1f} ms")
+col3.metric("Tỷ lệ lỗi", f"{metrics['error_rate']:.1%}")
+st.subheader("Số lời gọi theo bước")
+step_rows = [
+    {"Bước": step, "Số lời gọi": count} for step, count in metrics["counts_per_step"].items()
+]
+st.dataframe(pd.DataFrame(step_rows), use_container_width=True)
+st.subheader("Lời gọi gần đây")
+if metrics["recent_calls"]:
+    st.dataframe(pd.DataFrame(metrics["recent_calls"]), use_container_width=True)
+else:
+    st.info("Chưa có bản ghi nhật ký lời gọi nào.")

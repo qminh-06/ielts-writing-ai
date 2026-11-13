@@ -16,7 +16,6 @@ from langgraph.graph import END, StateGraph
 
 from ielts_ai.config import get_settings
 from ielts_ai.db.repo import save_ai_result, set_status
-from ielts_ai.guardrails.injection import detect_injection
 from ielts_ai.guardrails.input_checks import validate_input
 from ielts_ai.guardrails.output_checks import check_evidence, validate_output
 from ielts_ai.llm.client import get_llm_client
@@ -48,17 +47,12 @@ def _validate_input_node(state: GradingState) -> GradingState:
     """
     logger.info("Node: validate_input (essay_id=%s)", state["essay_id"])
     check = validate_input(state["essay_text"], state["candidate_email"])
-    injection = detect_injection(state["essay_text"])
 
     errors = list(state.get("errors", []))
     warnings = list(state.get("warnings", []))
 
     errors.extend(check.errors)
     warnings.extend(check.warnings)
-
-    if injection:
-        warnings.extend(injection)
-        logger.warning("Injection detected in essay %s: %s", state["essay_id"], injection)
 
     return {**state, "errors": errors, "warnings": warnings}
 

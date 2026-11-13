@@ -20,7 +20,7 @@ from ielts_ai.config import get_settings
 from ielts_ai.guardrails.output_checks import validate_output
 from ielts_ai.llm.base import LLMClient
 from ielts_ai.observability.call_logger import log_call
-from ielts_ai.schemas import Criterion, GradingResult
+from ielts_ai.schemas import Criterion, CriterionScore, GradingResult
 
 logger = logging.getLogger(__name__)
 
@@ -53,7 +53,8 @@ def evaluate_essay(
     examiner_feedback: str | None = None,
     warnings: list[str] | None = None,
     version: int = 1,
-) -> GradingResult:
+    previous_score: CriterionScore | None = None,
+) -> GradingResult | CriterionScore:
     """Grade an IELTS Writing Task 2 essay (or re-grade a single criterion).
 
     Handles prompt construction, LLM completion, fence stripping, Pydantic validation,
@@ -71,8 +72,11 @@ def evaluate_essay(
             rubric_context=rubric_context,
             criterion=regrade_criterion.value,
             examiner_feedback=examiner_feedback,
+            previous_score=previous_score.band if previous_score else 0.0,
+            previous_comment=previous_score.comment if previous_score else "",
+            previous_evidence=previous_score.evidence if previous_score else [],
         )
-        step = f"regrade_{regrade_criterion.value}"
+        step = "regrade"
     else:
         system, user = build_grading_prompt(
             prompt_text=prompt_text,
@@ -95,6 +99,15 @@ def evaluate_essay(
 
             cleaned_text = _strip_markdown_fences(response.text)
             raw = json.loads(cleaned_text)
+
+            if regrade_criterion is not None:
+                raw.setdefault("criterion", regrade_criterion.value)
+                score = CriterionScore.model_validate(raw)
+                if score.criterion != regrade_criterion:
+                    raise ValueError(
+                        f"Expected criterion {regrade_criterion.value}, got {score.criterion.value}"
+                    )
+                return score
 
             # Populate metadata
             raw["essay_id"] = essay_id

@@ -29,7 +29,7 @@ flowchart TD
     end
 
     subgraph DB["Data Layer"]
-        SQLITE["SQLite\n(essays, ai_results,\nreviews, emails, llm_calls)"]
+        SQLITE["SQLite\n(essays, ai_results, reviews,\nregrade_requests, emails, llm_calls)"]
         LOGGER["call_logger\n(latency, tokens, retries)"]
     end
 
@@ -58,3 +58,12 @@ flowchart TD
 | `services/email_service.py` | Send result email | C |
 | `observability/call_logger.py` | Log every LLM/retrieval call | C |
 | `app/pages/` | 5 Streamlit pages | D |
+
+## Examiner review and re-grade
+
+AI grading rows are immutable and use monotonically increasing versions. A re-grade retrieves
+rubric chunks for one criterion, records both retrieval and model calls, and replaces only that
+criterion in a copy of the latest AI result. `regrade_requests` links the examiner feedback to
+the source and destination versions. Examiner drafts are stored separately in `reviews` and are
+not overwritten by AI output; approval locks further edits and re-grades. The `reviews` migration
+allows draft rows to have no `approved_at` timestamp while preserving older approved rows.

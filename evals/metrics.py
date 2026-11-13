@@ -48,6 +48,41 @@ def compute_run_to_run_variance(band_runs: list[float]) -> float:
     return float(statistics.stdev(band_runs))
 
 
+def run_to_run_variance(essay: list[Any], n_runs: int = 3) -> dict[str, Any]:
+    """Summarize criterion band ranges and sample standard deviations for one essay's runs.
+
+    ``essay`` is the ordered collection of GradingResult objects (or serialized dicts)
+    collected by running the same essay repeatedly.
+    """
+    runs = essay[:n_runs]
+    if not runs:
+        return {"runs": 0, "criteria": {}, "all_criteria_within_0_5": False}
+
+    def values(result: Any) -> dict[str, float]:
+        if isinstance(result, GradingResult):
+            return {score.criterion.value: score.band for score in result.criteria}
+        return {item["criterion"]: float(item["band"]) for item in result["criteria"]}
+
+    per_run = [values(result) for result in runs]
+    summary: dict[str, Any] = {}
+    for criterion in ("TR", "CC", "LR", "GRA"):
+        bands = [result[criterion] for result in per_run if criterion in result]
+        if not bands:
+            continue
+        summary[criterion] = {
+            "min": min(bands),
+            "max": max(bands),
+            "range": max(bands) - min(bands),
+            "standard_deviation": statistics.stdev(bands) if len(bands) > 1 else 0.0,
+        }
+    within = (
+        len(per_run) == n_runs
+        and len(summary) == 4
+        and all(item["range"] <= 0.5 for item in summary.values())
+    )
+    return {"runs": len(runs), "criteria": summary, "all_criteria_within_0_5": within}
+
+
 def compute_guardrail_pass_rate(test_results: list[bool]) -> float:
     """Calculate pass rate for guardrail test cases."""
     if not test_results:

@@ -7,6 +7,8 @@ import logging
 import re
 from dataclasses import dataclass, field
 
+from ielts_ai.guardrails.injection import detect_injection
+
 logger = logging.getLogger(__name__)
 
 _EMAIL_RE = re.compile(r"^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$")
@@ -81,6 +83,8 @@ def validate_input(essay_text: str, email: str) -> InputCheckResult:
             f"Bài viết có {word_count} từ, ít hơn 250 từ yêu cầu của IELTS Task 2 / "
             f"Essay has {word_count} words, below the 250-word IELTS Task 2 minimum."
         )
+
+    result.warnings.extend(detect_injection(stripped))
 
     logger.debug(
         "Input check: email=%s, chars=%d, words=%d, errors=%d, warnings=%d",
