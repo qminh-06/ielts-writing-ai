@@ -1,52 +1,46 @@
-"""Prompt injection detection guardrail.
-
-Detects attempts by essay text to escape its data context and inject
-instructions into the grading prompt.
-
-# TODO(B6): Implement robust injection detection (P1).
-# Current implementation: simple keyword list (intentionally minimal).
-"""
+"""Detect likely prompt injection text in untrusted essay and feedback data."""
 
 import logging
+import re
+import unicodedata
 
 logger = logging.getLogger(__name__)
 
-# TODO(B6): Expand this list with more sophisticated patterns.
-# Consider: semantic similarity to instruction verbs, delimiter escapes, role switching.
-_INJECTION_KEYWORDS: list[str] = [
-    "ignore previous instructions",
-    "ignore all previous",
-    "disregard the above",
-    "you are now",
-    "new instructions:",
-    "system prompt:",
-    "forget everything",
-    "as an ai",
-    "pretend you are",
-    "act as",
-    "</essay>",
-    "[end of essay]",
-    "###",
-]
+
+def _normalize(text: str) -> str:
+    """Lowercase text, strip Vietnamese accents, and collapse whitespace."""
+    lowered = text.lower().replace("đ", "d")
+    decomposed = unicodedata.normalize("NFD", lowered)
+    plain = "".join(char for char in decomposed if unicodedata.category(char) != "Mn")
+    return re.sub(r"\s+", " ", plain).strip()
+
+
+_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = tuple(
+    (label, re.compile(pattern))
+    for label, pattern in (
+        (
+            "ignore previous instructions",
+            r"\b(ignore|disregard|forget)\s+(all\s+)?(the\s+)?(previous|above|prior)\s+(instructions?|rules?)\b",
+        ),
+        (
+            "score override",
+            r"\b(give|assign|set|raise|award)\s+(this\s+)?(essay|me|the candidate)?\s*(a\s+)?band\s*9\b",
+        ),
+        ("persona override", r"\b(you are now|act as|pretend you are)\b"),
+        ("system prompt", r"\b(system prompt|developer instructions?)\b"),
+        ("Vietnamese instruction override", r"\b(bo qua|hay bo qua)\s+(cac\s+)?huong dan\b"),
+        ("Vietnamese score override", r"\b(cho|hay cho)\s+(bai nay\s+)?band\s*9\b"),
+        ("delimiter escape", r"</essay>|</examiner_feedback>|\[end of essay\]"),
+    )
+)
 
 
 def detect_injection(text: str) -> list[str]:
-    """Detect potential prompt injection attempts in essay text.
-
-    Args:
-        text: Essay text to check.
-
-    Returns:
-        List of detected injection patterns (empty if clean).
-        Each string describes what was detected.
-
-    # TODO(B6): Replace with a more robust detection approach.
-    # Ideas: regex patterns, semantic classifier, LLM-based detection.
-    """
-    lower = text.lower()
-    detected = []
-    for keyword in _INJECTION_KEYWORDS:
-        if keyword in lower:
-            detected.append(f"Potential injection detected: {keyword!r}")
-            logger.warning("Injection pattern detected in essay: %r", keyword)
-    return detected
+    """Return warnings for instruction-like overrides in untrusted text."""
+    normalized = _normalize(text)
+    warnings: list[str] = []
+    for label, pattern in _PATTERNS:
+        if pattern.search(normalized):
+            warnings.append(f"Potential injection detected: {label}")
+            logger.warning("Injection pattern detected: %s", label)
+    return warnings

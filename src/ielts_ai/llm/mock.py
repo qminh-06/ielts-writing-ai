@@ -1,6 +1,8 @@
 """Mock LLM client for testing and development without real API calls."""
 
+import json
 import logging
+import re
 from pathlib import Path
 
 from ielts_ai.llm.base import LLMResponse
@@ -41,6 +43,13 @@ class MockLLMClient:
         """
         logger.debug("MockLLMClient: returning mock grading result")
         text = self._mock_path.read_text(encoding="utf-8")
+        if "Re-evaluate ONLY criterion" in user:
+            match = re.search(r"Re-evaluate ONLY criterion (TR|CC|LR|GRA)", user)
+            result = json.loads(text)
+            criterion = match.group(1) if match else "TR"
+            text = json.dumps(
+                next(item for item in result["criteria"] if item["criterion"] == criterion)
+            )
         # Estimate token counts (rough approximation for observability logging)
         input_tokens = len((system + user).split())
         output_tokens = len(text.split())

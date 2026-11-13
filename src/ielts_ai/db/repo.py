@@ -42,6 +42,27 @@ def init_db(db_path: str, schema_path: str | None = None) -> None:
     Path(db_path).parent.mkdir(parents=True, exist_ok=True)
     with _get_conn(db_path) as conn:
         conn.executescript(Path(schema_path).read_text())
+        review_columns = conn.execute("PRAGMA table_info(reviews)").fetchall()
+        approved_column = next(row for row in review_columns if row["name"] == "approved_at")
+        if approved_column["notnull"]:
+            conn.executescript(
+                """CREATE TABLE reviews_migrated (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    essay_id INTEGER NOT NULL REFERENCES essays(id),
+                    final_bands_json TEXT NOT NULL,
+                    examiner_comment TEXT NOT NULL,
+                    approved_at TEXT,
+                    action TEXT NOT NULL DEFAULT 'accept'
+                );
+                INSERT INTO reviews_migrated
+                    (id, essay_id, final_bands_json, examiner_comment, approved_at, action)
+                SELECT id, essay_id, final_bands_json, examiner_comment, approved_at, 'accept'
+                FROM reviews;
+                DROP TABLE reviews;
+                ALTER TABLE reviews_migrated RENAME TO reviews;"""
+            )
+        elif not any(row["name"] == "action" for row in review_columns):
+            conn.execute("ALTER TABLE reviews ADD COLUMN action TEXT NOT NULL DEFAULT 'accept'")
     logger.info("Database initialized at %s", db_path)
 
 
@@ -171,6 +192,7 @@ def save_review(
     essay_id: int,
     final_bands_json: str,
     examiner_comment: str,
+    action: str = "accept",
 ) -> int:
     """Save examiner review decision.
 
@@ -184,11 +206,64 @@ def save_review(
         ID of the new reviews record.
     """
     with _get_conn(db_path) as conn:
+        if action == "draft":
+            conn.execute("DELETE FROM reviews WHERE essay_id = ? AND action = 'draft'", (essay_id,))
+            cur = conn.execute(
+                "INSERT INTO reviews (essay_id, final_bands_json, examiner_comment, approved_at, action) "
+                "VALUES (?, ?, ?, NULL, 'draft')",
+                (essay_id, final_bands_json, examiner_comment),
+            )
+        else:
+            cur = conn.execute(
+                "INSERT INTO reviews (essay_id, final_bands_json, examiner_comment, action) "
+                "VALUES (?, ?, ?, ?)",
+                (essay_id, final_bands_json, examiner_comment, action),
+            )
+    return cur.lastrowid
+
+
+def save_regrade_request(
+    db_path: str, essay_id: int, criterion: str, feedback: str, from_version: int, to_version: int
+) -> int:
+    """Persist a completed re-grade request and its version link."""
+    with _get_conn(db_path) as conn:
         cur = conn.execute(
-            "INSERT INTO reviews (essay_id, final_bands_json, examiner_comment) VALUES (?, ?, ?)",
-            (essay_id, final_bands_json, examiner_comment),
+            "INSERT INTO regrade_requests (essay_id, criterion, feedback, from_version, to_version) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (essay_id, criterion, feedback, from_version, to_version),
         )
     return cur.lastrowid
+
+
+def list_regrade_requests(db_path: str, essay_id: int) -> list[dict[str, Any]]:
+    """List an essay's re-grade history in creation order."""
+    with _get_conn(db_path) as conn:
+        rows = conn.execute(
+            "SELECT * FROM regrade_requests WHERE essay_id = ? ORDER BY id", (essay_id,)
+        ).fetchall()
+    return [dict(row) for row in rows]
+
+
+def get_review_record(db_path: str, essay_id: int) -> dict[str, Any] | None:
+    """Return the latest approved review, if any."""
+    with _get_conn(db_path) as conn:
+        row = conn.execute(
+            "SELECT * FROM reviews WHERE essay_id = ? AND action = 'accept' "
+            "ORDER BY id DESC LIMIT 1",
+            (essay_id,),
+        ).fetchone()
+    return dict(row) if row else None
+
+
+def get_review_draft(db_path: str, essay_id: int) -> dict[str, Any] | None:
+    """Return the current editable review draft, if any."""
+    with _get_conn(db_path) as conn:
+        row = conn.execute(
+            "SELECT * FROM reviews WHERE essay_id = ? AND action = 'draft' "
+            "ORDER BY id DESC LIMIT 1",
+            (essay_id,),
+        ).fetchone()
+    return dict(row) if row else None
 
 
 def record_email(

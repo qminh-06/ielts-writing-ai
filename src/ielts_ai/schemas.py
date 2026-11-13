@@ -5,6 +5,13 @@ from enum import Enum
 from pydantic import BaseModel, field_validator, model_validator
 
 
+def calculate_overall_band(bands: list[float]) -> float:
+    """Apply IELTS half-up-to-0.5 rounding to a list of criterion bands."""
+    if not bands:
+        raise ValueError("At least one criterion band is required.")
+    return math.floor(sum(bands) / len(bands) * 2 + 0.5) / 2
+
+
 class Criterion(str, Enum):
     TR = "TR"  # Task Response
     CC = "CC"  # Coherence & Cohesion
@@ -68,8 +75,7 @@ class GradingResult(BaseModel):
     @property
     def overall_band(self) -> float:
         """IELTS rounding: floor(mean * 2 + 0.5) / 2."""
-        mean = sum(c.band for c in self.criteria) / 4
-        return math.floor(mean * 2 + 0.5) / 2
+        return calculate_overall_band([criterion.band for criterion in self.criteria])
 
 
 class ReviewDecision(BaseModel):
