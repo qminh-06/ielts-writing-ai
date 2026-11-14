@@ -24,8 +24,9 @@ def test_strip_markdown_fences() -> None:
     assert _strip_markdown_fences(fenced_no_tag) == '{"test": 2}'
 
 
-def test_real_llm_client_missing_key() -> None:
-    client = RealLLMClient(api_key="", model="gemini-2.5-flash")
+def test_real_llm_client_missing_key(monkeypatch) -> None:
+    monkeypatch.setenv("LLM_API_KEY", "")
+    client = RealLLMClient(api_key="", model="gemini-3.8-flash")
     with pytest.raises(LLMProviderError, match="LLM_API_KEY is not set"):
         client.complete_json("system", "user")
 
@@ -42,13 +43,13 @@ def test_real_llm_client_mocked_gemini() -> None:
         mock_instance.models.generate_content.return_value = fake_response
         mock_client_cls.return_value = mock_instance
 
-        client = RealLLMClient(api_key="fake-test-key", model="gemini-2.5-flash")
+        client = RealLLMClient(api_key="fake-test-key", model="gemini-3.8-flash")
         resp = client.complete_json("system prompt", "user prompt", temperature=0.0)
 
         assert resp.text == '{"criteria": [], "warnings": []}'
         assert resp.input_tokens == 120
         assert resp.output_tokens == 80
-        assert resp.model == "gemini-2.5-flash"
+        assert resp.model == "gemini-3.8-flash"
 
 
 @pytest.mark.integration
