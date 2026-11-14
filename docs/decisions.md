@@ -27,3 +27,18 @@
 ## D7: Google GenAI (Gemini SDK) làm Real LLM Provider
 **Quyết định:** Sử dụng thư viện `google-genai` làm SDK duy nhất cho `RealLLMClient`.
 **Lý do:** Hỗ trợ native JSON mode (`response_mime_type="application/json"`), tốc độ inference nhanh, phù hợp quy mô dự án và đáp ứng tiêu chí định dạng JSON có cấu trúc.
+## D8: Claim email before delivery
+**Quyết định:** Tạo email attempt trạng thái `sending` trong transaction trước khi gọi sender.
+**Lý do:** Chặn double-click và chỉ cho phép retry sau khi attempt trước chuyển `failed`.
+
+## D9: File mode is the default
+**Quyết định:** `EMAIL_MODE=file` là mặc định; SMTP chỉ bật qua `.env`.
+**Lý do:** Demo và test offline không gửi thư thật.
+
+## D10: Credentials policy
+**Quyết định:** API key và SMTP credentials chỉ đọc từ environment hoặc `.env`, không ghi vào code, logs, database hay test output.
+**Lý do:** Bảo vệ thông tin xác thực và tránh secret leak qua repository.
+
+## D11: Feature freeze after Day 5
+**Quyết định:** Sau Day 5 chỉ nhận bug fix, test và documentation.
+**Lý do:** Ổn định luồng demo và tránh tăng phạm vi MVP.
