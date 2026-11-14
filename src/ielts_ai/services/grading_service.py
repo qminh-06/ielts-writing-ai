@@ -8,7 +8,7 @@ from typing import Any
 
 from ielts_ai.agent.graph import run_grading
 from ielts_ai.config import get_settings
-from ielts_ai.db.repo import create_essay, get_essay, list_ai_results, list_essays
+from ielts_ai.db.repo import create_essay, get_essay, list_ai_results, list_essays, set_status
 from ielts_ai.schemas import GradingResult
 
 logger = logging.getLogger(__name__)
@@ -41,6 +41,8 @@ def start_grading(essay_id: int) -> dict[str, Any]:
             f"Cannot start grading for essay {essay_id}: status is {current_status!r}. "
             "Grading is only permitted when status is 'pending' or 'grading_failed'."
         )
+    if current_status == "grading_failed":
+        set_status(settings.db_path, essay_id, "pending")
 
     state = run_grading(
         essay_id=essay_id,
