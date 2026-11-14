@@ -22,9 +22,9 @@ ignore = ["B008", "E501"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]
-addopts = "-v"
+addopts = "-v -m 'not integration'"
 markers = [
-    "integration: opt-in integration tests against real LLM provider",
+    "integration: opt-in tests against real LLM or SMTP providers",
 ]
 
 [tool.ruff.lint.isort]

@@ -8,10 +8,14 @@ from typing import Any
 from ielts_ai.agent.evaluate import evaluate_essay
 from ielts_ai.config import get_settings
 from ielts_ai.db.repo import (
+    claim_email_send,
+    complete_email_send,
+    fail_email_send,
     get_essay,
     get_review_draft,
     get_review_record,
     list_ai_results,
+    list_email_attempts,
     list_regrade_requests,
     save_ai_result,
     save_regrade_request,
@@ -33,7 +37,7 @@ from ielts_ai.schemas import (
     ReviewDecision,
     calculate_overall_band,
 )
-from ielts_ai.services.email_service import send_email
+from ielts_ai.services.email_service import EmailSendError, send_email
 
 logger = logging.getLogger(__name__)
 
@@ -216,23 +220,60 @@ def get_review_state(essay_id: int) -> dict[str, Any]:
     }
 
 
-def approve_and_send(essay_id: int) -> dict[str, Any]:
-    """Approve essay and dispatch final result email, only after examiner approval."""
+def get_email_preview(essay_id: int) -> dict[str, str]:
+    """Build the examiner-approved Vietnamese email without sending it."""
     settings = get_settings()
     essay = get_essay(settings.db_path, essay_id)
-    if not essay:
+    review = get_review_record(settings.db_path, essay_id)
+    if essay is None or review is None:
+        raise LookupError(f"Approved review for essay {essay_id} not found")
+    bands = json.loads(review["final_bands_json"])
+    typed_bands = {Criterion(code): float(band) for code, band in bands.items()}
+    overall = final_overall_band(typed_bands)
+    subject = f"Kết quả IELTS Writing Task 2 — Bài #{essay_id}"
+    body = (
+        "Kính gửi thí sinh,\n\n"
+        "Kết quả IELTS Writing Task 2 của bạn đã được giám khảo xác nhận.\n\n"
+        f"Task Response (TR): {typed_bands[Criterion.TR]:.1f}\n"
+        f"Coherence & Cohesion (CC): {typed_bands[Criterion.CC]:.1f}\n"
+        f"Lexical Resource (LR): {typed_bands[Criterion.LR]:.1f}\n"
+        f"Grammatical Range & Accuracy (GRA): {typed_bands[Criterion.GRA]:.1f}\n"
+        f"Overall Band: {overall:.1f}\n\n"
+        f"Nhận xét của giám khảo:\n{review['examiner_comment']}\n\n"
+        "Trân trọng,\nIELTS Writing AI Assistant"
+    )
+    return {"recipient": essay["candidate_email"], "subject": subject, "body": body}
+
+
+def get_email_history(essay_id: int) -> list[dict[str, Any]]:
+    """Return non-secret email delivery attempts for the result page."""
+    return list_email_attempts(get_settings().db_path, essay_id)
+
+
+def approve_and_send(essay_id: int) -> dict[str, Any]:
+    """Claim, send, and record an examiner-approved result exactly once."""
+    settings = get_settings()
+    essay = get_essay(settings.db_path, essay_id)
+    if essay is None:
         raise LookupError(f"Essay {essay_id} not found")
     if essay["status"] != EssayStatus.approved.value:
-        raise ValueError(
-            f"Cannot send email: essay {essay_id} has status {essay['status']!r}, must be 'approved'."
+        raise ReviewValidationError(
+            f"Cannot send email: essay has status {essay['status']!r}, must be 'approved'."
         )
-    to_email = essay["candidate_email"]
-    subject = f"Kết quả chấm điểm IELTS Writing Task 2 (Bài #{essay_id})"
-    body = (
-        "Kính gửi thí sinh,\n\nBài viết của bạn đã được giám khảo chấm và phê duyệt.\n"
-        "Chi tiết kết quả có thể tra cứu tại hệ thống.\n\nTrân trọng,\nIELTS Writing Assistant Team"
-    )
-    success = send_email(to=to_email, subject=subject, body=body, essay_id=essay_id)
-    if success:
-        set_status(settings.db_path, essay_id, EssayStatus.emailed.value)
-    return {"essay_id": essay_id, "status": "emailed" if success else "failed"}
+    preview = get_email_preview(essay_id)
+    try:
+        attempt_id = claim_email_send(settings.db_path, essay_id, preview["recipient"])
+    except ValueError as error:
+        raise ReviewValidationError(str(error)) from error
+    try:
+        send_email(
+            to=preview["recipient"],
+            subject=preview["subject"],
+            body=preview["body"],
+            essay_id=essay_id,
+        )
+    except EmailSendError as error:
+        fail_email_send(settings.db_path, attempt_id, str(error))
+        raise
+    complete_email_send(settings.db_path, attempt_id)
+    return {"essay_id": essay_id, "status": "emailed", "email_id": attempt_id}

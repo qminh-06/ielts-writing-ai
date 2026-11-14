@@ -6,6 +6,8 @@ Status transitions are enforced here; invalid transitions raise ValueError.
 
 import logging
 import sqlite3
+from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
@@ -22,12 +24,17 @@ _TRANSITIONS: dict[str, list[str]] = {
 }
 
 
-def _get_conn(db_path: str) -> sqlite3.Connection:
-    """Return a SQLite connection with row_factory set."""
+@contextmanager
+def _get_conn(db_path: str) -> Iterator[sqlite3.Connection]:
+    """Yield a SQLite connection and always close it after its transaction."""
     conn = sqlite3.connect(db_path)
-    conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA foreign_keys = ON")
-    return conn
+    try:
+        conn.row_factory = sqlite3.Row
+        conn.execute("PRAGMA foreign_keys = ON")
+        with conn:
+            yield conn
+    finally:
+        conn.close()
 
 
 def init_db(db_path: str, schema_path: str | None = None) -> None:
@@ -292,6 +299,73 @@ def record_email(
             (essay_id, to_email, status, error, sent_at),
         )
     return cur.lastrowid
+
+
+def claim_email_send(db_path: str, essay_id: int, to_email: str) -> int:
+    """Atomically reserve an email send attempt for an approved essay."""
+    with _get_conn(db_path) as conn:
+        conn.execute("BEGIN IMMEDIATE")
+        essay = conn.execute("SELECT status FROM essays WHERE id = ?", (essay_id,)).fetchone()
+        if essay is None:
+            raise LookupError(f"Essay id={essay_id} not found")
+        if essay["status"] != "approved":
+            raise ValueError("Email can only be sent when essay status is 'approved'.")
+        existing = conn.execute(
+            "SELECT id FROM emails WHERE essay_id = ? AND status IN ('sending', 'sent') LIMIT 1",
+            (essay_id,),
+        ).fetchone()
+        if existing:
+            raise ValueError("An email is already sending or has already been sent for this essay.")
+        cur = conn.execute(
+            "INSERT INTO emails (essay_id, to_email, status) VALUES (?, ?, 'sending')",
+            (essay_id, to_email),
+        )
+    return cur.lastrowid
+
+
+def complete_email_send(db_path: str, email_id: int) -> None:
+    """Atomically mark a claimed email sent and its approved essay emailed."""
+    with _get_conn(db_path) as conn:
+        conn.execute("BEGIN IMMEDIATE")
+        attempt = conn.execute(
+            "SELECT essay_id FROM emails WHERE id = ? AND status = 'sending'", (email_id,)
+        ).fetchone()
+        if attempt is None:
+            raise ValueError("Email attempt is not in the sending state.")
+        essay_id = attempt["essay_id"]
+        cursor = conn.execute(
+            "UPDATE essays SET status = 'emailed' WHERE id = ? AND status = 'approved'",
+            (essay_id,),
+        )
+        if cursor.rowcount != 1:
+            raise ValueError("Essay must remain approved until its email is sent.")
+        cursor = conn.execute(
+            "UPDATE emails SET status = 'sent', sent_at = datetime('now'), error = NULL "
+            "WHERE id = ? AND status = 'sending'",
+            (email_id,),
+        )
+        if cursor.rowcount != 1:
+            raise ValueError("Email attempt could not be completed.")
+
+
+def fail_email_send(db_path: str, email_id: int, error: str) -> None:
+    """Mark a claimed email attempt as failed with a sanitized error."""
+    with _get_conn(db_path) as conn:
+        conn.execute(
+            "UPDATE emails SET status = 'failed', error = ? WHERE id = ?", (error, email_id)
+        )
+
+
+def list_email_attempts(db_path: str, essay_id: int | None = None) -> list[dict[str, Any]]:
+    """List email attempts, optionally for one essay, newest first."""
+    with _get_conn(db_path) as conn:
+        if essay_id is None:
+            rows = conn.execute("SELECT * FROM emails ORDER BY id DESC").fetchall()
+        else:
+            rows = conn.execute(
+                "SELECT * FROM emails WHERE essay_id = ? ORDER BY id DESC", (essay_id,)
+            ).fetchall()
+    return [dict(row) for row in rows]
 
 
 def log_llm_call(

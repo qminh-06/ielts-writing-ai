@@ -1,74 +1,104 @@
-"""Email service for dispatching grading results to candidates.
-
-Supports:
-- file mode (EMAIL_MODE=file): writes mock .txt email files into outbox/
-- smtp mode (EMAIL_MODE=smtp): connects to real SMTP server (# TODO(C5))
-"""
+"""Safe file and SMTP delivery for examiner-approved result emails."""
 
 import logging
+import re
+import smtplib
 from datetime import UTC, datetime
+from email.message import EmailMessage
 from pathlib import Path
 
 from ielts_ai.config import get_settings
-from ielts_ai.db.repo import record_email
 
 logger = logging.getLogger(__name__)
 
+_EMAIL_RE = re.compile(
+    r"^[A-Za-z0-9!#$%&'*+/=?^_`{|}~-]+"
+    r"(?:\.[A-Za-z0-9!#$%&'*+/=?^_`{|}~-]+)*@"
+    r"(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)+"
+    r"[A-Za-z]{2,63}$"
+)
 
-def send_email(
-    to: str,
-    subject: str,
-    body: str,
-    essay_id: int | None = None,
-) -> bool:
-    """Send an email to the candidate.
 
-    In file mode, writes a file into outbox/<timestamp>_<to>.txt.
-    In smtp mode, uses smtplib (# TODO(C5)).
+class EmailSendError(RuntimeError):
+    """A sanitized delivery error safe to show to an examiner."""
+
+
+def _validate_header(value: str, label: str) -> str:
+    """Reject header injection and empty values."""
+    cleaned = value.strip()
+    if not cleaned or "\r" in value or "\n" in value:
+        raise EmailSendError(f"{label} is invalid.")
+    return cleaned
+
+
+def _validate_recipient(address: str) -> str:
+    """Validate a simple single-recipient email address."""
+    cleaned = _validate_header(address, "Recipient")
+    if not _EMAIL_RE.fullmatch(cleaned):
+        raise EmailSendError("Recipient email address is invalid.")
+    return cleaned
+
+
+def _safe_error(error: Exception, mode: str) -> str:
+    """Map SMTP errors to a credential-safe message."""
+    if isinstance(error, EmailSendError):
+        return str(error)
+    if mode == "file" and isinstance(error, OSError):
+        return "Email could not be saved to outbox."
+    if isinstance(error, smtplib.SMTPAuthenticationError):
+        return "SMTP authentication failed. Check SMTP settings."
+    if isinstance(error, smtplib.SMTPRecipientsRefused):
+        return "SMTP rejected the recipient address."
+    if isinstance(error, smtplib.SMTPException | TimeoutError | OSError):
+        return "SMTP delivery failed. Check the server settings and try again."
+    return "Email delivery failed. Please try again."
+
+
+def send_email(to: str, subject: str, body: str, essay_id: int | None = None) -> bool:
+    """Deliver an email in file or SMTP mode without recording database state.
+
+    ``essay_id`` is retained for backward compatibility and only names the file-mode artifact.
+    The caller owns claim, success, and failure persistence.
     """
+    recipient = _validate_recipient(to)
+    clean_subject = _validate_header(subject, "Subject")
     settings = get_settings()
     mode = settings.email_mode.lower()
-
-    if mode == "file":
-        outbox = Path("outbox")
-        outbox.mkdir(parents=True, exist_ok=True)
-        ts = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
-        safe_to = to.replace("@", "_at_").replace(".", "_")
-        filepath = outbox / f"{ts}_{safe_to}.txt"
-
-        content = f"To: {to}\nSubject: {subject}\n\n{body}"
-        filepath.write_text(content, encoding="utf-8")
-        logger.info("Email written to outbox file: %s", filepath)
-
-        if essay_id is not None:
-            record_email(settings.db_path, essay_id, to, status="sent")
-        return True
-
-    elif mode == "smtp":
-        # TODO(C5): Implement real SMTP sending via smtplib
-        logger.warning("SMTP mode requested, but real SMTP is TODO(C5).")
-        try:
-            import smtplib
-            from email.mime.text import MIMEText
-
-            msg = MIMEText(body)
-            msg["Subject"] = subject
-            msg["From"] = settings.smtp_user or "noreply@ielts-ai.com"
-            msg["To"] = to
-
-            with smtplib.SMTP(settings.smtp_host, settings.smtp_port) as server:
-                if settings.smtp_user and settings.smtp_password:
-                    server.starttls()
-                    server.login(settings.smtp_user, settings.smtp_password)
-                server.send_message(msg)
-
-            if essay_id is not None:
-                record_email(settings.db_path, essay_id, to, status="sent")
+    try:
+        if mode == "file":
+            outbox = Path("outbox")
+            outbox.mkdir(parents=True, exist_ok=True)
+            timestamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S_%f")
+            identifier = str(essay_id) if essay_id is not None else "test"
+            path = outbox / f"{identifier}_{timestamp}.txt"
+            path.write_text(
+                f"To: {recipient}\nSubject: {clean_subject}\n\n{body}", encoding="utf-8"
+            )
+            logger.info("Email saved in file mode for essay %s", identifier)
             return True
-        except Exception as exc:
-            logger.error("SMTP send failed: %s", exc)
-            if essay_id is not None:
-                record_email(settings.db_path, essay_id, to, status="failed", error=str(exc))
-            return False
-    else:
-        raise ValueError(f"Unknown EMAIL_MODE={mode!r}")
+        if mode != "smtp":
+            raise EmailSendError("EMAIL_MODE must be 'file' or 'smtp'.")
+
+        message = EmailMessage()
+        message["To"] = recipient
+        message["From"] = _validate_recipient(settings.smtp_user)
+        message["Subject"] = clean_subject
+        message.set_content(body, charset="utf-8")
+        timeout = 15
+        if settings.smtp_port == 465:
+            with smtplib.SMTP_SSL(
+                settings.smtp_host, settings.smtp_port, timeout=timeout
+            ) as server:
+                server.login(settings.smtp_user, settings.smtp_password)
+                server.send_message(message)
+        else:
+            with smtplib.SMTP(settings.smtp_host, settings.smtp_port, timeout=timeout) as server:
+                server.starttls()
+                server.login(settings.smtp_user, settings.smtp_password)
+                server.send_message(message)
+        logger.info("SMTP email delivered for essay %s", essay_id)
+        return True
+    except Exception as error:
+        safe = _safe_error(error, mode)
+        logger.warning("Email delivery failed for essay %s: %s", essay_id, safe)
+        raise EmailSendError(safe) from None
