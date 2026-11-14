@@ -4,7 +4,7 @@ import json
 
 import streamlit as st
 
-from ielts_ai.services.grading_service import get_all_essays
+from app.ui_helpers import select_essay
 from ielts_ai.services.review_service import (
     Criterion,
     ReviewDecision,
@@ -16,18 +16,10 @@ from ielts_ai.services.review_service import (
 
 st.set_page_config(page_title="Giám khảo duyệt - IELTS AI", page_icon="⚖️", layout="wide")
 st.header("Bước 3: Giám khảo xem xét và phê duyệt")
-essays = get_all_essays()
-if not essays:
-    st.info("Chưa có bài viết nào.")
+essay_id = select_essay("Chọn mã bài viết cần duyệt")
+if essay_id is None:
     st.stop()
 
-essay_ids = [essay["id"] for essay in essays]
-default_id = st.session_state.get("current_essay_id", essay_ids[0])
-essay_id = st.selectbox(
-    "Chọn mã bài viết cần duyệt:",
-    essay_ids,
-    index=essay_ids.index(default_id) if default_id in essay_ids else 0,
-)
 state = get_review_state(essay_id)
 essay = state["essay"]
 latest = state["latest"]

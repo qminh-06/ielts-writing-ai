@@ -3,7 +3,7 @@
 import pytest
 
 from ielts_ai.config import get_settings
-from ielts_ai.db.repo import get_essay, init_db, list_llm_calls
+from ielts_ai.db.repo import create_essay, get_essay, init_db, list_llm_calls, set_status
 from ielts_ai.schemas import Criterion, ReviewDecision
 from ielts_ai.services.grading_service import start_grading, submit_and_grade
 from ielts_ai.services.review_service import approve_and_send, save_examiner_review
@@ -55,6 +55,22 @@ def test_start_grading_idempotency() -> None:
     # Calling start_grading again on an essay with status 'ai_done' must be refused
     with pytest.raises(ValueError, match="Cannot start grading"):
         start_grading(essay_id)
+
+
+def test_grading_failed_essay_can_be_retried() -> None:
+    settings = get_settings()
+    essay_id = create_essay(
+        settings.db_path,
+        "retry@test.com",
+        "Discuss education.",
+        " ".join(["Education supports resilient communities and progress."] * 45),
+    )
+    set_status(settings.db_path, essay_id, "grading_failed")
+
+    result = start_grading(essay_id)
+
+    assert result["status"] == "ai_done"
+    assert get_essay(settings.db_path, essay_id)["status"] == "ai_done"
 
 
 def test_observability_llm_calls_completeness() -> None:

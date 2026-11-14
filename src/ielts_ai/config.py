@@ -20,6 +20,7 @@ class Settings(BaseSettings):
     smtp_port: int = Field(default=587, description="SMTP server port")
     smtp_user: str = Field(default="", description="SMTP username")
     smtp_password: str = Field(default="", description="SMTP password")
+    smtp_test_to: str = Field(default="", description="Recipient for opt-in SMTP integration tests")
 
 
 def get_settings() -> Settings:

@@ -4,8 +4,8 @@ from collections import defaultdict
 
 import streamlit as st
 
+from app.ui_helpers import select_essay
 from ielts_ai.services.grading_service import (
-    get_all_essays,
     get_essay_details,
     get_latest_grading_result,
     start_grading,
@@ -14,18 +14,9 @@ from ielts_ai.services.grading_service import (
 st.set_page_config(page_title="Kết quả AI - IELTS AI", page_icon="📊", layout="wide")
 st.header("📊 Bước 2: Kết quả đánh giá từ AI")
 
-essays = get_all_essays()
-if not essays:
-    st.info("Chưa có bài viết nào được nộp. Vui lòng quay lại Trang 1 để nộp bài.")
+selected_id = select_essay("Chọn mã bài viết cần xem")
+if selected_id is None:
     st.stop()
-
-essay_ids = [e["id"] for e in essays]
-default_id = st.session_state.get("current_essay_id", essay_ids[0])
-selected_id = st.selectbox(
-    "Chọn mã bài viết cần xem:",
-    essay_ids,
-    index=essay_ids.index(default_id) if default_id in essay_ids else 0,
-)
 
 essay_info = get_essay_details(selected_id)
 if not essay_info:

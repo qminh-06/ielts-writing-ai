@@ -17,7 +17,7 @@ class RealLLMClient:
     ) -> None:
         self._settings = get_settings()
         self._api_key = api_key or self._settings.llm_api_key
-        self._model = model or self._settings.llm_model or "gemini-2.5-flash"
+        self._model = model or self._settings.llm_model or "gemini-3.8-flash"
         self._timeout = timeout
 
         if not self._api_key:
