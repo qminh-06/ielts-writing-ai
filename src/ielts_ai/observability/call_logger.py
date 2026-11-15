@@ -3,15 +3,31 @@
 Usage as context manager:
     with log_call("grade", essay_id=1, db_path="data/app.db") as ctx:
         result = llm_client.complete_json(system, user)
-        ctx.set_tokens(result.input_tokens, result.output_tokens)
+        ctx.set_tokens(
+            result.input_tokens, result.output_tokens, result.thinking_tokens
+        )
 """
 
 import logging
 import time
 from collections.abc import Generator
 from contextlib import contextmanager
+from json import JSONDecodeError
+
+from ielts_ai.llm.base import LLMProviderError
 
 logger = logging.getLogger(__name__)
+
+
+def _safe_call_error(error: Exception) -> str:
+    """Keep model output, candidate data, and credentials out of persistent logs."""
+    if isinstance(error, LLMProviderError):
+        return str(error)
+    if isinstance(error, JSONDecodeError):
+        return "Provider returned invalid JSON."
+    if type(error).__name__ == "ValidationError":
+        return "Provider response did not match the grading schema."
+    return f"Call failed ({type(error).__name__})."
 
 
 class CallContext:
@@ -20,12 +36,14 @@ class CallContext:
     def __init__(self) -> None:
         self.input_tokens: int = 0
         self.output_tokens: int = 0
+        self.thinking_tokens: int = 0
         self.retries: int = 0
 
-    def set_tokens(self, input_tokens: int, output_tokens: int) -> None:
+    def set_tokens(self, input_tokens: int, output_tokens: int, thinking_tokens: int = 0) -> None:
         """Set token counts from LLM response."""
         self.input_tokens = input_tokens
         self.output_tokens = output_tokens
+        self.thinking_tokens = thinking_tokens
 
     def set_retries(self, retries: int) -> None:
         """Set retry count."""
@@ -61,8 +79,8 @@ def log_call(
         yield ctx
     except Exception as exc:
         status = "error"
-        error_msg = str(exc)
-        logger.error("LLM call failed — step=%s essay_id=%s error=%s", step, essay_id, exc)
+        error_msg = _safe_call_error(exc)
+        logger.error("LLM call failed — step=%s essay_id=%s error=%s", step, essay_id, error_msg)
         raise
     finally:
         latency_ms = (time.monotonic() - start) * 1000
@@ -74,6 +92,7 @@ def log_call(
                 latency_ms=latency_ms,
                 input_tokens=ctx.input_tokens,
                 output_tokens=ctx.output_tokens,
+                thinking_tokens=ctx.thinking_tokens,
                 retries=ctx.retries,
                 status=status,
                 error=error_msg,

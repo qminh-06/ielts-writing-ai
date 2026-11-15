@@ -4,7 +4,7 @@ import re
 from collections import defaultdict
 from typing import Any
 
-PROMPT_VERSION = "1.1.0"
+PROMPT_VERSION = "1.2.0"
 
 
 def _escape_closing_delimiters(text: str) -> str:
@@ -29,7 +29,7 @@ You must evaluate the essay across exactly four criteria:
 Strict Rules:
 - Base your scoring strictly on the provided official rubric descriptors for each criterion.
 - Band scores for each criterion must be between 0.0 and 9.0 in increments of 0.5 (e.g., 5.0, 5.5, 6.0, 6.5, 7.0).
-- Evidence strings MUST be exact, verbatim quotes copied directly from the essay text. Do not paraphrase or alter quotes.
+- Evidence quotes MUST be copied EXACTLY from the essay, including the candidate's grammar and spelling mistakes. Never correct, paraphrase, or alter a quote.
 - Provide concise, constructive comments explaining why the score is assigned.
 - HARD RULE: Do NOT output an overall band. The overall band is strictly computed in application code.
 - Return ONLY valid JSON matching this exact structure:

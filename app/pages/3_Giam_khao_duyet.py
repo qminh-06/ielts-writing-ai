@@ -186,7 +186,12 @@ with st.expander("Chấm lại một tiêu chí"):
                 st.session_state[f"regrade_success_{essay_id}"] = (
                     f"{target.value}: {old_band:.1f} → {new_band:.1f}"
                 )
-                st.rerun()
-            except (ReviewValidationError, ValueError, LookupError) as error:
                 st.session_state[busy_key] = False
-                st.error(str(error))
+                st.rerun()
+            except (
+                ReviewValidationError,
+                ValueError,
+                LookupError,
+            ) as error:
+                st.session_state[busy_key] = False
+                st.error(f"Chấm lại thất bại; bạn có thể thử lại. {error}")

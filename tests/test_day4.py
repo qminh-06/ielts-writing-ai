@@ -105,6 +105,13 @@ def test_approved_essay_refuses_regrade():
         request_regrade(result["essay_id"], Criterion.GRA, "Review grammar accuracy again, please.")
 
 
+def test_regrade_rejects_overlong_unicode_feedback() -> None:
+    result = submit_and_grade("unicode@test.com", "Discuss education.", _essay_text())
+
+    with pytest.raises(ValueError, match="10-1000 characters"):
+        request_regrade(result["essay_id"], Criterion.TR, "🙂" * 1001)
+
+
 def test_unsupported_feedback_keeps_band_and_persists_result(monkeypatch):
     result = submit_and_grade("unsupported@test.com", "Discuss education.", _essay_text())
     previous = result["result"]

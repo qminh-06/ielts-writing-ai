@@ -103,12 +103,13 @@ def search_rubric(
             collection = client.get_collection("ielts_rubric")
         except Exception as get_exc:
             raise RubricIndexNotFoundError(
-                "Rubric index not found. Please run `make index` / `python scripts/build_rubric_index.py`."
+                "Rubric index not found. Please run " "`python scripts/build_rubric_index.py`."
             ) from get_exc
 
         if collection.count() == 0:
             raise RubricIndexNotFoundError(
-                "Rubric index collection is empty. Please run `make index` / `python scripts/build_rubric_index.py`."
+                "Rubric index collection is empty. Please run "
+                "`python scripts/build_rubric_index.py`."
             )
 
         results: Any = collection.query(
@@ -133,5 +134,6 @@ def search_rubric(
     except Exception as exc:
         logger.error("ChromaDB search failed: %s", exc)
         raise RubricIndexNotFoundError(
-            f"ChromaDB error ({exc}). Please run `make index` / `python scripts/build_rubric_index.py`."
+            "ChromaDB search failed. Please check the index and run "
+            "`python scripts/build_rubric_index.py`."
         ) from exc

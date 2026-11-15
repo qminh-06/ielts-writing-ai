@@ -17,7 +17,8 @@ from langgraph.graph import END, StateGraph
 from ielts_ai.config import get_settings
 from ielts_ai.db.repo import save_ai_result, set_status
 from ielts_ai.guardrails.input_checks import validate_input
-from ielts_ai.guardrails.output_checks import check_evidence, validate_output
+from ielts_ai.guardrails.output_checks import check_evidence, evidence_in_essay, validate_output
+from ielts_ai.llm.base import LLMProviderError
 from ielts_ai.llm.client import get_llm_client
 from ielts_ai.observability.call_logger import log_call
 from ielts_ai.rag.retriever import RubricIndexNotFoundError, search_rubric
@@ -40,6 +41,21 @@ class GradingState(TypedDict):
     warnings: list[str]
 
 
+def _evidence_retry_warning(result: GradingResult, essay_text: str) -> str:
+    """Tell the model which exact quotes failed the evidence check."""
+    missing_quotes = [
+        f"{score.criterion.value}: {quote!r}"
+        for score in result.criteria
+        for quote in score.evidence
+        if quote and not evidence_in_essay(quote, essay_text)
+    ]
+    return (
+        "CRITICAL: These exact evidence quotes were not found in the essay: "
+        + "; ".join(missing_quotes)
+        + ". Copy exact character sequences from the candidate's essay."
+    )
+
+
 def _validate_input_node(state: GradingState) -> GradingState:
     """Node 1: Validate input essay and email.
 
@@ -53,6 +69,12 @@ def _validate_input_node(state: GradingState) -> GradingState:
 
     errors.extend(check.errors)
     warnings.extend(check.warnings)
+    if check.errors:
+        logger.warning(
+            "Input validation rejected essay %s with %s error(s).",
+            state["essay_id"],
+            len(check.errors),
+        )
 
     return {**state, "errors": errors, "warnings": warnings}
 
@@ -84,18 +106,12 @@ def _retrieve_rubric_node(state: GradingState) -> GradingState:
     except RubricIndexNotFoundError as err:
         logger.error("Rubric retrieval failed: %s", err)
         errors.append(str(err))
-        try:
-            set_status(settings.db_path, state["essay_id"], EssayStatus.grading_failed.value)
-        except Exception:
-            pass
+        set_status(settings.db_path, state["essay_id"], EssayStatus.grading_failed.value)
         return {**state, "rubric_chunks": [], "errors": errors}
     except Exception as exc:
-        logger.error("Unexpected error during retrieval: %s", exc)
-        errors.append(f"Rubric retrieval failed: {exc}")
-        try:
-            set_status(settings.db_path, state["essay_id"], EssayStatus.grading_failed.value)
-        except Exception:
-            pass
+        logger.error("Unexpected rubric retrieval failure (%s).", type(exc).__name__)
+        errors.append(f"Rubric retrieval failed ({type(exc).__name__}).")
+        set_status(settings.db_path, state["essay_id"], EssayStatus.grading_failed.value)
         return {**state, "rubric_chunks": [], "errors": errors}
 
     logger.debug("Retrieved %d rubric chunks for essay %s", len(chunks), state["essay_id"])
@@ -125,12 +141,17 @@ def _grade_node(state: GradingState) -> GradingState:
         )
         return {**state, "result": result}
     except Exception as exc:
-        logger.error("Grading failed for essay %s: %s", state["essay_id"], exc)
-        try:
-            set_status(settings.db_path, state["essay_id"], EssayStatus.grading_failed.value)
-        except Exception:
-            pass
-        return {**state, "errors": state.get("errors", []) + [str(exc)]}
+        if isinstance(exc, LLMProviderError):
+            message = str(exc)
+        elif isinstance(exc, TimeoutError):
+            message = "LLM request timed out."
+        elif isinstance(exc, ValueError) and str(exc).startswith("Failed to grade essay"):
+            message = str(exc)
+        else:
+            message = f"Grading failed ({type(exc).__name__})."
+        logger.error("Grading failed for essay %s (%s).", state["essay_id"], type(exc).__name__)
+        set_status(settings.db_path, state["essay_id"], EssayStatus.grading_failed.value)
+        return {**state, "errors": state.get("errors", []) + [message]}
 
 
 def _validate_output_node(state: GradingState) -> GradingState:
@@ -158,10 +179,7 @@ def _validate_output_node(state: GradingState) -> GradingState:
         try:
             from ielts_ai.agent.evaluate import evaluate_essay
 
-            retry_warning = [
-                "CRITICAL: The previous quotes were not found verbatim in the essay. "
-                "You MUST copy exact character sequences from the candidate's essay."
-            ]
+            retry_warning = [_evidence_retry_warning(result, essay_text)]
             retry_result = evaluate_essay(
                 essay_id=state["essay_id"],
                 prompt_text=state["prompt_text"],
@@ -193,8 +211,15 @@ def _validate_output_node(state: GradingState) -> GradingState:
         )
         set_status(settings.db_path, state["essay_id"], EssayStatus.ai_done.value)
     except Exception as exc:
-        logger.error("Could not persist result / update status to ai_done: %s", exc)
-        return {**state, "errors": state.get("errors", []) + [str(exc)]}
+        logger.error("Could not persist grading result (%s).", type(exc).__name__)
+        try:
+            set_status(settings.db_path, state["essay_id"], EssayStatus.grading_failed.value)
+        except ValueError:
+            logger.error("Could not mark essay %s as grading_failed.", state["essay_id"])
+        return {
+            **state,
+            "errors": state.get("errors", []) + ["Could not save the grading result to SQLite."],
+        }
 
     return {**state, "result": result}
 

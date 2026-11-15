@@ -18,6 +18,7 @@ class LLMResponse:
     input_tokens: int
     output_tokens: int
     model: str
+    thinking_tokens: int = 0
 
 
 @runtime_checkable

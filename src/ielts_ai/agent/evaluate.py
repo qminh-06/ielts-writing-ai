@@ -94,56 +94,65 @@ def evaluate_essay(
         try:
             with log_call(step, essay_id=essay_id, db_path=settings.db_path) as ctx:
                 ctx.set_retries(retries)
-                response = llm_client.complete_json(system, current_user_prompt, temperature=0.0)
-                ctx.set_tokens(response.input_tokens, response.output_tokens)
-
-            cleaned_text = _strip_markdown_fences(response.text)
-            raw = json.loads(cleaned_text)
-
-            if regrade_criterion is not None:
-                raw.setdefault("criterion", regrade_criterion.value)
-                score = CriterionScore.model_validate(raw)
-                if score.criterion != regrade_criterion:
-                    raise ValueError(
-                        f"Expected criterion {regrade_criterion.value}, got {score.criterion.value}"
+                try:
+                    response = llm_client.complete_json(
+                        system, current_user_prompt, temperature=0.0
                     )
-                return score
+                finally:
+                    ctx.set_retries(retries + getattr(llm_client, "last_attempt_retries", 0))
+                ctx.set_tokens(
+                    response.input_tokens, response.output_tokens, response.thinking_tokens
+                )
+                cleaned_text = _strip_markdown_fences(response.text)
+                raw = json.loads(cleaned_text)
 
-            # Populate metadata
-            raw["essay_id"] = essay_id
-            raw["version"] = version
-            raw["model"] = f"{response.model} (prompt:v{PROMPT_VERSION})"
-            raw["created_at"] = datetime.now(UTC).isoformat()
-            raw["retrieved_rubric"] = [
-                c.model_dump() if hasattr(c, "model_dump") else c for c in rubric_chunks
-            ]
+                if regrade_criterion is not None:
+                    raw.setdefault("criterion", regrade_criterion.value)
+                    score = CriterionScore.model_validate(raw)
+                    if score.criterion != regrade_criterion:
+                        raise ValueError(
+                            f"Expected criterion {regrade_criterion.value}, "
+                            f"got {score.criterion.value}"
+                        )
+                    return score
 
-            result = GradingResult.model_validate(raw)
+                raw["essay_id"] = essay_id
+                raw["version"] = version
+                raw["model"] = f"{response.model} (prompt:v{PROMPT_VERSION})"
+                raw["created_at"] = datetime.now(UTC).isoformat()
+                raw["retrieved_rubric"] = [
+                    c.model_dump() if hasattr(c, "model_dump") else c for c in rubric_chunks
+                ]
 
-            # Run output checks & collect warnings (without failing)
-            output_warnings = validate_output(result, essay_text)
-            if output_warnings:
-                for ow in output_warnings:
-                    if ow not in result.warnings:
-                        result.warnings.append(ow)
-                logger.warning("Output warnings for essay %s: %s", essay_id, output_warnings)
+                result = GradingResult.model_validate(raw)
+                output_warnings = validate_output(result, essay_text)
+                if output_warnings:
+                    for ow in output_warnings:
+                        if ow not in result.warnings:
+                            result.warnings.append(ow)
+                    logger.warning(
+                        "Output warnings for essay %s: %d evidence or band warning(s).",
+                        essay_id,
+                        len(output_warnings),
+                    )
 
-            return result
+                return result
 
         except (json.JSONDecodeError, ValueError) as exc:
             last_error = exc
             retries += 1
             logger.warning(
-                "Grading attempt %d failed for essay %s: %s. Feeding error back for retry.",
+                "Grading attempt %d failed for essay %s (%s). Feeding validation feedback "
+                "back for retry.",
                 attempt + 1,
                 essay_id,
-                exc,
+                type(exc).__name__,
             )
             # Feed back validation error to the LLM on retry
             current_user_prompt = (
                 f"{user}\n\n"
                 f"ATTENTION: Your previous response was invalid JSON or failed schema validation with error:\n"
-                f"{exc}\n"
+                f"{str(exc)[:1000]}\n"
                 f"Please fix this and output strictly valid JSON conforming to the schema."
             )
             if attempt >= MAX_RETRIES:
@@ -151,5 +160,5 @@ def evaluate_essay(
 
     raise ValueError(
         f"Failed to grade essay {essay_id} after {MAX_RETRIES + 1} attempts. "
-        f"Last error: {last_error}"
+        f"Last error: {type(last_error).__name__ if last_error else 'unknown'}."
     )

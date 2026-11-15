@@ -4,6 +4,7 @@ UI pages interact through this service, never importing agent or db directly.
 """
 
 import logging
+import threading
 from typing import Any
 
 from ielts_ai.agent.graph import run_grading
@@ -12,6 +13,18 @@ from ielts_ai.db.repo import create_essay, get_essay, list_ai_results, list_essa
 from ielts_ai.schemas import GradingResult
 
 logger = logging.getLogger(__name__)
+
+_grading_locks: dict[int, threading.Lock] = {}
+_grading_locks_guard = threading.Lock()
+
+
+class GradingInProgressError(RuntimeError):
+    """Raised when another request is already grading the same essay."""
+
+
+def _lock_for_essay(essay_id: int) -> threading.Lock:
+    with _grading_locks_guard:
+        return _grading_locks.setdefault(essay_id, threading.Lock())
 
 
 def start_grading(essay_id: int) -> dict[str, Any]:
@@ -30,38 +43,45 @@ def start_grading(essay_id: int) -> dict[str, Any]:
         LookupError: If essay_id is not found.
         ValueError: If essay status is not 'pending' or 'grading_failed'.
     """
-    settings = get_settings()
-    essay = get_essay(settings.db_path, essay_id)
-    if not essay:
-        raise LookupError(f"Essay {essay_id} not found")
+    lock = _lock_for_essay(essay_id)
+    if not lock.acquire(blocking=False):
+        logger.warning("Duplicate grading request ignored for essay %s.", essay_id)
+        raise GradingInProgressError(f"Grading is already in progress for essay {essay_id}.")
+    try:
+        settings = get_settings()
+        essay = get_essay(settings.db_path, essay_id)
+        if not essay:
+            raise LookupError(f"Essay {essay_id} not found")
 
-    current_status = essay["status"]
-    if current_status not in ("pending", "grading_failed"):
-        raise ValueError(
-            f"Cannot start grading for essay {essay_id}: status is {current_status!r}. "
-            "Grading is only permitted when status is 'pending' or 'grading_failed'."
+        current_status = essay["status"]
+        if current_status not in ("pending", "grading_failed"):
+            raise ValueError(
+                f"Cannot start grading for essay {essay_id}: status is {current_status!r}. "
+                "Grading is only permitted when status is 'pending' or 'grading_failed'."
+            )
+        if current_status == "grading_failed":
+            set_status(settings.db_path, essay_id, "pending")
+
+        state = run_grading(
+            essay_id=essay_id,
+            prompt_text=essay["prompt_text"],
+            essay_text=essay["essay_text"],
+            candidate_email=essay["candidate_email"],
+            version=1,
         )
-    if current_status == "grading_failed":
-        set_status(settings.db_path, essay_id, "pending")
 
-    state = run_grading(
-        essay_id=essay_id,
-        prompt_text=essay["prompt_text"],
-        essay_text=essay["essay_text"],
-        candidate_email=essay["candidate_email"],
-        version=1,
-    )
+        final_essay = get_essay(settings.db_path, essay_id)
+        final_status = final_essay["status"] if final_essay else current_status
 
-    final_essay = get_essay(settings.db_path, essay_id)
-    final_status = final_essay["status"] if final_essay else current_status
-
-    return {
-        "essay_id": essay_id,
-        "status": final_status,
-        "result": state.get("result"),
-        "errors": state.get("errors", []),
-        "warnings": state.get("warnings", []),
-    }
+        return {
+            "essay_id": essay_id,
+            "status": final_status,
+            "result": state.get("result"),
+            "errors": state.get("errors", []),
+            "warnings": state.get("warnings", []),
+        }
+    finally:
+        lock.release()
 
 
 def submit_and_grade(

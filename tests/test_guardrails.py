@@ -2,9 +2,14 @@
 
 from datetime import UTC, datetime
 
+import pytest
+
+from ielts_ai.db.repo import create_essay, init_db, list_llm_calls
 from ielts_ai.guardrails.input_checks import validate_input
 from ielts_ai.guardrails.output_checks import evidence_in_essay, validate_output
+from ielts_ai.rag.retriever import RubricIndexNotFoundError, search_rubric
 from ielts_ai.schemas import Criterion, CriterionScore, GradingResult
+from ielts_ai.services.grading_service import start_grading
 
 
 def test_input_checks() -> None:
@@ -57,3 +62,69 @@ def test_output_checks_evidence() -> None:
 
     warnings = validate_output(res, essay)
     assert any("evidence not found" in w.lower() for w in warnings)
+
+
+def test_evidence_matching_normalizes_typographic_variants_and_edge_punctuation() -> None:
+    essay = "The student’s well-being — including\u00a0mental health — should matter."
+    assert evidence_in_essay('"THE student\'s well-being - including mental   health,"', essay)
+
+
+def test_ellipsis_evidence_fragments_must_match_in_order() -> None:
+    essay = (
+        "First evidence fragment has four words, then the second evidence fragment also has four."
+    )
+    assert evidence_in_essay(
+        "“First evidence fragment has four words…” ... ‘second evidence fragment also has four!’",
+        essay,
+    )
+    assert not evidence_in_essay(
+        "second evidence fragment also has four ... First evidence fragment has four words",
+        essay,
+    )
+
+
+def test_ellipsis_short_fragments_are_not_used_as_evidence() -> None:
+    assert not evidence_in_essay(
+        "only three words ... and just three", "only three words and just three"
+    )
+
+
+def test_unusual_unicode_and_overlong_essays_fail_validation_without_crashing() -> None:
+    unusual = "Cafe\u0301\u00a0🙂\u2028" * 2500
+    result = validate_input(unusual, "student@example.com")
+
+    assert not result.is_valid
+    assert any("quá dài" in error for error in result.errors)
+
+
+def test_missing_chroma_index_suggests_index_build_command(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("USE_MOCK_RAG", "false")
+    monkeypatch.setenv("CHROMA_DIR", str(tmp_path / "empty-chroma"))
+
+    with pytest.raises(RubricIndexNotFoundError) as error:
+        search_rubric(Criterion.TR, "task response", top_k=1)
+    assert "python scripts/build_rubric_index.py" in str(error.value)
+
+
+def test_missing_chroma_index_fails_grading_and_logs_retrieval_error(tmp_path, monkeypatch) -> None:
+    db_path = str(tmp_path / "grading.db")
+    init_db(db_path)
+    monkeypatch.setenv("DB_PATH", db_path)
+    monkeypatch.setenv("USE_MOCK_RAG", "false")
+    monkeypatch.setenv("CHROMA_DIR", str(tmp_path / "empty-chroma"))
+    essay_id = create_essay(
+        db_path,
+        "student@example.com",
+        "Discuss community service.",
+        " ".join(["Community service can help students learn useful skills."] * 50),
+    )
+
+    result = start_grading(essay_id)
+
+    assert result["status"] == "grading_failed"
+    assert "python scripts/build_rubric_index.py" in result["errors"][0]
+    retrieve_call = next(
+        call for call in list_llm_calls(db_path, essay_id) if call["step"] == "retrieve"
+    )
+    assert retrieve_call["status"] == "error"
+    assert retrieve_call["error"] == "Call failed (RubricIndexNotFoundError)."

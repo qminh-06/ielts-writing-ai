@@ -61,6 +61,15 @@ Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope Process
 
 Nếu `.env` đã tồn tại, lệnh trên giữ nguyên file thay vì ghi đè cấu hình hoặc credentials của bạn.
 
+Nếu `python` mở Microsoft Store hoặc không tìm thấy Python, cài Python 3.11 và thử launcher Windows:
+
+```powershell
+py -3.11 --version
+py -3.11 -m venv .venv
+```
+
+Sau khi tạo môi trường, tiếp tục các lệnh cài đặt bằng `.\.venv\Scripts\python.exe -m pip ...` hoặc activate `.venv` như trên.
+
 ### macOS/Linux
 
 ```bash
@@ -86,6 +95,20 @@ python -m streamlit run app/streamlit_app.py
 Mở URL được Streamlit in ra, thường là `http://localhost:8501`. Dừng ứng dụng bằng `Ctrl+C` trong terminal đang chạy Streamlit.
 
 Khi chạy lại vào lần sau, kích hoạt `.venv` và chạy `streamlit` như trên. Nếu vừa sửa `.env`, dừng rồi khởi động lại Streamlit để tránh dùng tiến trình/cấu hình cũ.
+
+### Lệnh tương đương Makefile trên Windows
+
+| Tác vụ | PowerShell |
+|---|---|
+| Cài dependencies | `python -m pip install -r requirements.txt` rồi `python -m pip install -e .` |
+| Khởi tạo SQLite | `python scripts/init_db.py` |
+| Dựng Chroma index | `python scripts/build_rubric_index.py` |
+| Chạy Streamlit | `python -m streamlit run app/streamlit_app.py` |
+| Test mặc định | `python -m pytest -q` |
+| Check đầy đủ | `.\scripts\check.ps1` |
+| Chạy eval offline | `python evals/run_evals.py` |
+
+Trên macOS/Linux dùng `bash scripts/check.sh` để chạy cùng ba kiểm tra: Ruff, format và pytest.
 
 ## Cấu hình: LLM, RAG và email là ba lựa chọn riêng
 
@@ -132,6 +155,8 @@ LLM_MODEL=gemini-3.8-flash
 ```
 
 Chọn model mà API key/tài khoản của bạn được phép gọi. Không gửi API key qua chat, không ghi vào source code và không commit `.env`. Ứng dụng gửi prompt và essay tới nhà cung cấp LLM; chỉ dùng dữ liệu bạn được phép chia sẻ. Gemini thật không đồng nghĩa với RAG thật.
+
+Các giới hạn provider có mặc định an toàn trong `.env.example`: `LLM_TIMEOUT_SECONDS=60`, `LLM_MAX_ATTEMPTS=3`, `LLM_MAX_OUTPUT_TOKENS=2000`. Lỗi HTTP 429/5xx được retry với backoff có giới hạn; các lần thử được ghi vào `llm_calls.retries`. `LLM_THINKING_BUDGET` là tùy chọn và sẽ bị bỏ qua có log nếu model không hỗ trợ.
 
 ## Dùng ChromaDB thay mock RAG
 
@@ -220,11 +245,13 @@ python evals/run_evals.py
 Kết quả được in ra terminal và ghi vào `evals/results/latest.json`. Chạy variance bằng Gemini thật chỉ khi đã cấu hình `LLM_PROVIDER=real`, `LLM_API_KEY` và `LLM_MODEL`:
 
 ```powershell
+python evals/run_evals.py --provider real --limit 3 --sleep-between-calls 1
 python evals/run_evals.py --provider real --variance --runs 3
 python evals/regrade_probe.py
+python scripts/time_grading.py
 ```
 
-Các lệnh real gọi provider bên ngoài, có thể tiêu tốn quota/chi phí. `regrade_probe.py` cũng là probe real-provider, không phải test offline.
+Các lệnh real gọi provider bên ngoài, có thể tiêu tốn quota/chi phí và thời gian. Lệnh giới hạn ba essay tạo `evals/results/day6_evidence_debug.json`, gồm quote sai và substring gần nhất. `regrade_probe.py` cũng là probe real-provider, không phải test offline. `scripts/time_grading.py` đo một essay synthetic bằng provider thật và SQLite tạm; lệnh này cũng có thể mất vài phút khi provider timeout. Nếu mock provider được chọn, evidence và variance in `n/a (mock provider)` vì kết quả giả không đo chất lượng.
 
 Các metric gồm schema-valid rate, evidence-valid rate, run-to-run variance và guardrail pass rate. MAE bị bỏ qua nếu eval set không có reference bands đầy đủ. Essay hiện tại là synthetic; số liệu mock không phản ánh chất lượng chấm thực tế, còn kết quả real có thể thay đổi theo lần chạy. Hãy xem [docs/evals.md](docs/evals.md) trước khi diễn giải kết quả.
 
@@ -240,7 +267,11 @@ Các metric gồm schema-valid rate, evidence-valid rate, run-to-run variance v�
 ## Giới hạn và trạng thái dự án
 
 - Cần giám khảo con người xem xét và phê duyệt mọi kết quả cuối cùng.
+- Mô hình real có thể chậm hoặc timeout; thời gian phụ thuộc model, tải dịch vụ và mạng.
+- Kết quả real có thể thay đổi giữa các lần chạy (run-to-run variance).
 - Eval set synthetic chưa có reference bands; không thể dùng MAE để xác nhận độ chính xác.
 - Rubric corpus, nguồn và quyền sử dụng cần được con người xác minh trước khi dùng thực tế.
 - Cần bài viết thật và điểm tham chiếu do giám khảo cung cấp để đánh giá chất lượng.
+- Email mặc định ở `file` mode, không gửi thật cho đến khi SMTP được cấu hình và bật rõ ràng.
+- SQLite phù hợp demo/local single-user; WAL và busy timeout giảm va chạm ghi nhưng không biến ứng dụng thành hệ thống nhiều người dùng phân tán.
 - Sau Day 5, dự án **feature frozen**: chỉ nhận bug fixes, tests và documentation.
