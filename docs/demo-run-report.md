@@ -76,7 +76,10 @@ Tab **LLM và truy xuất** hiển thị 9 calls, latency, error/retry rate, b�
 ### Bước 10 — Check và tài liệu: PASS
 
 `.\scripts\check.ps1` chạy Ruff check, Ruff format check và pytest: lint/format đều pass,
-`65 passed, 2 deselected`.
+`65 passed, 2 deselected`. Clean clone của `fix/day6-stabilization` dùng Python 3.11.9 (máy không
+có launcher `py`, nên dùng `python -m venv`), cài requirements và editable package thành công,
+`pip check` không có dependency conflict, `scripts/init_db.py` và mock eval pass, Streamlit headless
+trả HTTP 200. Chroma index không cần build vì mock-RAG default hoạt động; clone tạm đã được xóa.
 
 ## Sự cố quan sát được
 
