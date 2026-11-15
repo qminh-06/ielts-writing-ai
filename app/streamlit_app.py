@@ -1,6 +1,13 @@
 """Trang chủ ứng dụng IELTS Writing AI Assistant."""
 
+import sys
+from pathlib import Path
+
 import streamlit as st
+
+REPO_ROOT = str(Path(__file__).resolve().parent.parent)
+if REPO_ROOT not in sys.path:
+    sys.path.insert(0, REPO_ROOT)
 
 st.set_page_config(
     page_title="IELTS Writing AI Assistant",
