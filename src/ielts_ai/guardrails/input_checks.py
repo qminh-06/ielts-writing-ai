@@ -87,8 +87,7 @@ def validate_input(essay_text: str, email: str) -> InputCheckResult:
     result.warnings.extend(detect_injection(stripped))
 
     logger.debug(
-        "Input check: email=%s, chars=%d, words=%d, errors=%d, warnings=%d",
-        email,
+        "Input check: chars=%d, words=%d, errors=%d, warnings=%d",
         char_count,
         word_count,
         len(result.errors),

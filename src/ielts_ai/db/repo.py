@@ -27,9 +27,11 @@ _TRANSITIONS: dict[str, list[str]] = {
 @contextmanager
 def _get_conn(db_path: str) -> Iterator[sqlite3.Connection]:
     """Yield a SQLite connection and always close it after its transaction."""
-    conn = sqlite3.connect(db_path)
+    conn = sqlite3.connect(db_path, timeout=5.0)
     try:
         conn.row_factory = sqlite3.Row
+        conn.execute("PRAGMA busy_timeout = 5000")
+        conn.execute("PRAGMA journal_mode = WAL")
         conn.execute("PRAGMA foreign_keys = ON")
         with conn:
             yield conn
@@ -49,6 +51,11 @@ def init_db(db_path: str, schema_path: str | None = None) -> None:
     Path(db_path).parent.mkdir(parents=True, exist_ok=True)
     with _get_conn(db_path) as conn:
         conn.executescript(Path(schema_path).read_text())
+        llm_call_columns = conn.execute("PRAGMA table_info(llm_calls)").fetchall()
+        if not any(row["name"] == "thinking_tokens" for row in llm_call_columns):
+            conn.execute(
+                "ALTER TABLE llm_calls ADD COLUMN thinking_tokens INTEGER NOT NULL DEFAULT 0"
+            )
         review_columns = conn.execute("PRAGMA table_info(reviews)").fetchall()
         approved_column = next(row for row in review_columns if row["name"] == "approved_at")
         if approved_column["notnull"]:
@@ -96,7 +103,7 @@ def create_essay(
             (candidate_email, prompt_text, essay_text),
         )
         essay_id = cur.lastrowid
-    logger.info("Created essay id=%s for %s", essay_id, candidate_email)
+    logger.info("Created essay id=%s", essay_id)
     return essay_id
 
 
@@ -315,6 +322,7 @@ def claim_email_send(db_path: str, essay_id: int, to_email: str) -> int:
             (essay_id,),
         ).fetchone()
         if existing:
+            logger.warning("Duplicate email send rejected for essay %s.", essay_id)
             raise ValueError("An email is already sending or has already been sent for this essay.")
         cur = conn.execute(
             "INSERT INTO emails (essay_id, to_email, status) VALUES (?, ?, 'sending')",
@@ -378,6 +386,7 @@ def log_llm_call(
     retries: int = 0,
     status: str = "ok",
     error: str | None = None,
+    thinking_tokens: int = 0,
 ) -> int:
     """Log a single LLM or retrieval call.
 
@@ -398,9 +407,20 @@ def log_llm_call(
     with _get_conn(db_path) as conn:
         cur = conn.execute(
             """INSERT INTO llm_calls
-               (essay_id, step, latency_ms, input_tokens, output_tokens, retries, status, error)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
-            (essay_id, step, latency_ms, input_tokens, output_tokens, retries, status, error),
+               (essay_id, step, latency_ms, input_tokens, output_tokens, thinking_tokens,
+                retries, status, error)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                essay_id,
+                step,
+                latency_ms,
+                input_tokens,
+                output_tokens,
+                thinking_tokens,
+                retries,
+                status,
+                error,
+            ),
         )
     return cur.lastrowid
 

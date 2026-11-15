@@ -56,6 +56,7 @@ CREATE TABLE IF NOT EXISTS llm_calls (
     latency_ms  REAL NOT NULL,
     input_tokens INTEGER NOT NULL DEFAULT 0,
     output_tokens INTEGER NOT NULL DEFAULT 0,
+    thinking_tokens INTEGER NOT NULL DEFAULT 0,
     retries     INTEGER NOT NULL DEFAULT 0,
     status      TEXT NOT NULL DEFAULT 'ok',
     error       TEXT

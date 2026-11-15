@@ -4,7 +4,7 @@ import json
 
 import streamlit as st
 
-from app.ui_helpers import select_essay
+from app.ui_helpers import format_email_error, select_essay
 from ielts_ai.config import get_settings
 from ielts_ai.services.grading_service import get_essay_details
 from ielts_ai.services.review_service import (
@@ -78,11 +78,22 @@ if st.button(button_label, type="primary", disabled=send_disabled):
         st.rerun()
     except (EmailSendError, ValueError) as error:
         st.session_state[busy_key] = False
-        st.error(str(error))
+        st.error(format_email_error(str(error)))
 
 st.subheader("Lịch sử gửi email")
 if history:
-    st.dataframe(history, use_container_width=True)
+    history_display = [
+        {
+            **item,
+            "error": (
+                format_email_error(item["error"])
+                if item["status"] == "failed" and item["error"]
+                else item["error"]
+            ),
+        }
+        for item in history
+    ]
+    st.dataframe(history_display, use_container_width=True)
     if essay["status"] == "approved" and any(item["status"] == "failed" for item in history):
         st.caption("Bạn có thể xác nhận và thử gửi lại sau lần gửi thất bại.")
 else:

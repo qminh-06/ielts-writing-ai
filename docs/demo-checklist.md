@@ -29,7 +29,8 @@
 - [ ] Kiểm tra banner chế độ file hoặc SMTP
 - [ ] Chọn **"Tôi xác nhận gửi kết quả đã được giám khảo phê duyệt"**
 - [ ] Nhấn **"Gửi email kết quả"**; sau một lỗi thử nút **"Thử gửi lại"**
-- [ ] File mode tạo `.txt` trong `outbox/`; sau thành công status là `emailed`
+- [ ] File mode tạo `.txt` trong `outbox/`; `emailed` ở mode này không chứng minh đã gửi thư thật
+- [ ] Trước khi gửi qua SMTP, xác nhận banner ghi **"Chế độ SMTP: email sẽ được gửi thật qua SMTP."**
 
 ## Bước 7: Kiểm tra guardrail/lỗi
 - [ ] Essay quá ngắn hoặc quá dài bị từ chối; bài dưới 250 từ phát cảnh báo

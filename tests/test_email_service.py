@@ -1,5 +1,6 @@
 """Offline tests for approval-gated file/SMTP email behavior."""
 
+import smtplib
 from pathlib import Path
 
 import pytest
@@ -135,3 +136,82 @@ def test_password_is_not_exposed_in_error_database_or_logs(monkeypatch, email_en
     assert (
         "very-secret-password" not in list_email_attempts(email_environment, essay_id)[0]["error"]
     )
+
+
+@pytest.mark.parametrize(
+    ("failure", "message"),
+    [
+        (
+            smtplib.SMTPAuthenticationError(535, b"secret SMTP detail"),
+            "SMTP authentication failed. Check SMTP settings.",
+        ),
+        (
+            TimeoutError("secret timeout detail"),
+            "SMTP delivery failed. Check the server settings and try again.",
+        ),
+        (
+            ConnectionRefusedError("secret connection detail"),
+            "SMTP delivery failed. Check the server settings and try again.",
+        ),
+    ],
+)
+def test_smtp_failures_keep_approval_and_allow_retry(
+    monkeypatch, email_environment, failure, message
+) -> None:
+    essay_id = _approved()
+    monkeypatch.setenv("EMAIL_MODE", "smtp")
+    monkeypatch.setenv("SMTP_HOST", "smtp.example.com")
+    monkeypatch.setenv("SMTP_PORT", "587")
+    monkeypatch.setenv("SMTP_USER", "sender@example.com")
+    monkeypatch.setenv("SMTP_PASSWORD", "private-password")
+
+    class FailingSMTP:
+        def __init__(self, *args, **kwargs):
+            if isinstance(failure, ConnectionRefusedError):
+                raise failure
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def starttls(self):
+            if isinstance(failure, TimeoutError):
+                raise failure
+
+        def login(self, user, password):
+            if isinstance(failure, smtplib.SMTPAuthenticationError):
+                raise failure
+
+        def send_message(self, email_message):
+            pass
+
+    class SuccessfulSMTP:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def starttls(self):
+            pass
+
+        def login(self, user, password):
+            pass
+
+        def send_message(self, email_message):
+            pass
+
+    monkeypatch.setattr("ielts_ai.services.email_service.smtplib.SMTP", FailingSMTP)
+    with pytest.raises(EmailSendError, match=message) as error:
+        approve_and_send(essay_id)
+    assert "private-password" not in str(error.value)
+    assert get_essay(email_environment, essay_id)["status"] == "approved"
+    assert list_email_attempts(email_environment, essay_id)[0]["status"] == "failed"
+
+    monkeypatch.setattr("ielts_ai.services.email_service.smtplib.SMTP", SuccessfulSMTP)
+    assert approve_and_send(essay_id)["status"] == "emailed"

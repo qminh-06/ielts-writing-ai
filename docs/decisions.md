@@ -42,3 +42,15 @@
 ## D11: Feature freeze after Day 5
 **Quyết định:** Sau Day 5 chỉ nhận bug fix, test và documentation.
 **Lý do:** Ổn định luồng demo và tránh tăng phạm vi MVP.
+
+## D12: Bounded provider calls
+**Quyết định:** Gemini timeout, maximum attempts and output-token limit are configured through
+`LLM_TIMEOUT_SECONDS`, `LLM_MAX_ATTEMPTS` and `LLM_MAX_OUTPUT_TOKENS`. Only HTTP 429/5xx errors
+receive bounded exponential backoff; provider errors are sanitized before logging.
+**Lý do:** Keep real-provider grading bounded and make failures observable without exposing secrets.
+
+## D13: SQLite local concurrency
+**Quyết định:** SQLite connections use WAL mode and a five-second busy timeout; schema initialization
+idempotently adds the optional `thinking_tokens` call-log column.
+**Lý do:** Reduce transient lock errors during overlapping local Streamlit sessions while preserving
+the existing SQLite/no-ORM architecture. This does not claim distributed multi-user support.

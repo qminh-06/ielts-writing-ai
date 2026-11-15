@@ -5,6 +5,7 @@ Checks run AFTER the LLM returns a result, before saving to DB.
 
 import logging
 import re
+import unicodedata
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -17,22 +18,80 @@ MIN_BAND = 0.0
 MAX_BAND = 9.0
 
 
+_QUOTE_TRANSLATION = str.maketrans(
+    {
+        "\u2018": "'",
+        "\u2019": "'",
+        "\u201a": "'",
+        "\u201b": "'",
+        "\u2032": "'",
+        "\u201c": '"',
+        "\u201d": '"',
+        "\u201e": '"',
+        "\u201f": '"',
+        "\u2033": '"',
+        "\u2010": "-",
+        "\u2011": "-",
+        "\u2012": "-",
+        "\u2013": "-",
+        "\u2014": "-",
+        "\u2015": "-",
+        "\u2212": "-",
+    }
+)
+_ELLIPSIS_RE = re.compile(r"(?:\.{3,}|\u2026+)")
+_WORD_RE = re.compile(r"\w+", re.UNICODE)
+
+
 def _normalize(text: str) -> str:
-    """Normalize text for substring matching: lowercase, collapse whitespace."""
-    return re.sub(r"\s+", " ", text.lower().strip())
+    """Normalize common typography and whitespace for evidence matching."""
+    normalized = unicodedata.normalize("NFKC", text).translate(_QUOTE_TRANSLATION)
+    return " ".join(normalized.casefold().split())
+
+
+def _trim_edge_punctuation(text: str) -> str:
+    """Ignore punctuation added only at the beginning or end of a quote."""
+    start = 0
+    end = len(text)
+    while start < end and unicodedata.category(text[start]).startswith("P"):
+        start += 1
+    while end > start and unicodedata.category(text[end - 1]).startswith("P"):
+        end -= 1
+    return text[start:end]
+
+
+def _contains_in_order(essay: str, fragments: list[str]) -> bool:
+    """Check that each normalized fragment appears after the preceding fragment."""
+    position = 0
+    for fragment in fragments:
+        found = essay.find(fragment, position)
+        if found < 0:
+            return False
+        position = found + len(fragment)
+    return True
 
 
 def evidence_in_essay(evidence: str, essay_text: str) -> bool:
-    """Check if evidence string appears in the essay (case-insensitive, whitespace-normalized).
+    """Check normalized verbatim evidence, including ordered ellipsis fragments.
 
     Args:
         evidence: Evidence string from LLM output.
         essay_text: Original essay text.
 
     Returns:
-        True if evidence is a substring of normalized essay.
+        True if evidence appears in the normalized essay.
     """
-    return _normalize(evidence) in _normalize(essay_text)
+    normalized_essay = _normalize(essay_text)
+    if _ELLIPSIS_RE.search(evidence):
+        fragments = [
+            _trim_edge_punctuation(_normalize(fragment))
+            for fragment in _ELLIPSIS_RE.split(evidence)
+            if len(_WORD_RE.findall(fragment)) >= 4
+        ]
+        return bool(fragments) and _contains_in_order(normalized_essay, fragments)
+
+    normalized_evidence = _trim_edge_punctuation(_normalize(evidence))
+    return bool(normalized_evidence) and normalized_evidence in normalized_essay
 
 
 def check_bands(result: "GradingResult") -> list[str]:
@@ -76,9 +135,9 @@ def check_evidence(result: "GradingResult", essay_text: str) -> list[str]:
             if ev and not evidence_in_essay(ev, essay_text):
                 warnings.append(f"{cs.criterion.value}: evidence not found in essay: {ev!r}")
                 logger.warning(
-                    "Evidence not found in essay — criterion=%s evidence=%r",
+                    "Evidence not found in essay — criterion=%s evidence_length=%d",
                     cs.criterion.value,
-                    ev,
+                    len(ev),
                 )
     return warnings
 

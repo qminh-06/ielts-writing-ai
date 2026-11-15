@@ -6,11 +6,15 @@ Supports:
 """
 
 import argparse
+import difflib
 import json
 import os
+import re
 import sys
+import time
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 from unittest.mock import patch
 
 # Ensure root and src are on sys.path
@@ -27,12 +31,76 @@ from evals.metrics import (
 from ielts_ai.agent.evaluate import evaluate_essay
 from ielts_ai.config import get_settings
 from ielts_ai.db.repo import init_db
+from ielts_ai.guardrails.output_checks import _normalize, evidence_in_essay
+from ielts_ai.llm.base import LLMClient, LLMResponse
 from ielts_ai.llm.client import MockLLMClient, RealLLMClient
 from ielts_ai.rag.retriever import search_rubric
 from ielts_ai.schemas import Criterion, GradingResult
 
 
-def run_evals(provider: str = "mock", variance: bool = False, runs: int = 3) -> dict:
+class _PacedClient:
+    """Pause between provider calls to limit pressure during diagnostic runs."""
+
+    def __init__(self, client: LLMClient, seconds: float) -> None:
+        self._client = client
+        self._seconds = seconds
+        self._calls = 0
+
+    def complete_json(self, system: str, user: str, *, temperature: float = 0.0) -> LLMResponse:
+        if self._calls:
+            time.sleep(self._seconds)
+        self._calls += 1
+        return self._client.complete_json(system, user, temperature=temperature)
+
+
+def _closest_substring(quote: str, essay: str) -> str:
+    """Find the most similar essay word window using difflib."""
+    tokens = list(re.finditer(r"\S+", essay))
+    if not tokens:
+        return ""
+    target_words = max(1, len(re.findall(r"\w+", quote)))
+    widths = {max(1, min(len(tokens), target_words + offset)) for offset in range(-2, 3)}
+    target = _normalize(re.sub(r"(?:\.{3,}|\u2026+)", " ", quote))
+    closest = ""
+    highest_ratio = -1.0
+    for width in widths:
+        for start in range(max(1, len(tokens) - width + 1)):
+            end = start + width - 1
+            candidate = essay[tokens[start].start() : tokens[end].end()]
+            ratio = difflib.SequenceMatcher(
+                None, target, _normalize(candidate), autojunk=False
+            ).ratio()
+            if ratio > highest_ratio:
+                highest_ratio = ratio
+                closest = candidate
+    return closest
+
+
+def _debug_failed_quotes(results: list[tuple[GradingResult, str]]) -> list[dict[str, Any]]:
+    """Collect invalid model evidence and the closest matching essay substrings."""
+    failures: list[dict[str, Any]] = []
+    for result, essay_text in results:
+        for score in result.criteria:
+            for quote in score.evidence:
+                if quote and not evidence_in_essay(quote, essay_text):
+                    failures.append(
+                        {
+                            "essay_id": result.essay_id,
+                            "criterion": score.criterion.value,
+                            "quote": quote,
+                            "closest_substring": _closest_substring(quote, essay_text),
+                        }
+                    )
+    return failures
+
+
+def run_evals(
+    provider: str = "mock",
+    variance: bool = False,
+    runs: int = 3,
+    limit: int | None = None,
+    sleep_between_calls: float = 0.0,
+) -> dict:
     provider = provider.lower()
     real_provider = provider in ("real", "gemini")
     variance_enabled = real_provider and variance and runs == 3
@@ -48,9 +116,42 @@ def run_evals(provider: str = "mock", variance: bool = False, runs: int = 3) -> 
 
     with open(eval_file, encoding="utf-8") as f:
         essays = json.load(f)
+    if limit is not None:
+        if limit < 1:
+            raise ValueError("limit must be at least 1")
+        essays = essays[:limit]
 
     if real_provider:
-        client = RealLLMClient()
+        if not settings.llm_api_key:
+            reason = "LLM_API_KEY is not set; real-provider evaluation was not run."
+            debug_path = results_dir / "day6_evidence_debug.json"
+            debug_path.write_text(
+                json.dumps(
+                    {
+                        "timestamp": datetime.now(UTC).isoformat(),
+                        "provider": provider,
+                        "status": "skipped",
+                        "reason": reason,
+                        "failed_quotes": [],
+                    },
+                    indent=2,
+                ),
+                encoding="utf-8",
+            )
+            print(reason)
+            print(f"Evidence debug report written to: {debug_path}")
+            guardrail_rate = compute_guardrail_pass_rate(
+                evaluate_guardrail_cases(
+                    Path(__file__).parent.parent / "data" / "eval_set" / "guardrail_cases.json"
+                )
+            )
+            return {
+                "provider": provider,
+                "status": "skipped",
+                "reason": reason,
+                "guardrail_pass_rate": guardrail_rate,
+            }
+        client = _PacedClient(RealLLMClient(), sleep_between_calls)
     else:
         client = MockLLMClient()
 
@@ -59,6 +160,11 @@ def run_evals(provider: str = "mock", variance: bool = False, runs: int = 3) -> 
     variance_results: list[dict] = []
 
     print(f"\nEvaluating {len(essays)} synthetic essays using provider={provider!r}...")
+    if not real_provider:
+        print(
+            "Mock output is for workflow/schema checks only; its scores and evidence say nothing "
+            "about grading quality."
+        )
     if variance and not real_provider:
         print("Notice: run-to-run variance is meaningless with the deterministic mock provider.")
     if variance and real_provider and runs != 3:
@@ -125,7 +231,7 @@ def run_evals(provider: str = "mock", variance: bool = False, runs: int = 3) -> 
     schema_rate = compute_schema_valid_rate(raw_results)
 
     evidence_rates = [compute_evidence_valid_rate(res, text) for res, text in parsed_results]
-    avg_evidence_rate = sum(evidence_rates) / len(essays) if essays else 0.0
+    avg_evidence_rate = sum(evidence_rates) / len(parsed_results) if parsed_results else 0.0
 
     guardrail_path = Path(__file__).parent.parent / "data" / "eval_set" / "guardrail_cases.json"
     guardrail_rate = compute_guardrail_pass_rate(evaluate_guardrail_cases(guardrail_path))
@@ -150,13 +256,16 @@ def run_evals(provider: str = "mock", variance: bool = False, runs: int = 3) -> 
         else None
     )
 
+    failed_quotes = _debug_failed_quotes(parsed_results) if real_provider else []
     metrics_summary = {
         "timestamp": datetime.now(UTC).isoformat(),
         "provider": provider,
         "sample_count": len(essays),
         "schema_valid_rate": round(schema_rate, 4),
-        "evidence_valid_rate": round(avg_evidence_rate, 4),
-        "run_to_run_variance": "skipped",
+        "evidence_valid_rate": (
+            round(avg_evidence_rate, 4) if real_provider else "n/a (mock provider)"
+        ),
+        "run_to_run_variance": "skipped" if real_provider else "n/a (mock provider)",
         "guardrail_pass_rate": round(guardrail_rate, 4),
         "mae": round(mae, 4) if mae is not None else None,
     }
@@ -175,18 +284,20 @@ def run_evals(provider: str = "mock", variance: bool = False, runs: int = 3) -> 
 
     # Print table
     print("\n" + "=" * 54)
-    print("      IELTS Writing AI - Day 5 Evaluation Report       ")
+    print("      IELTS Writing AI - Day 6 Evaluation Report       ")
     print("=" * 54)
     print(f"{'Metric':<32} | {'Value':<16}")
     print("-" * 54)
     print(f"{'1. Schema-valid Rate':<32} | {schema_rate * 100:.1f}%")
-    print(f"{'2. Evidence-valid Rate':<32} | {avg_evidence_rate * 100:.1f}%")
+    evidence_display = f"{avg_evidence_rate * 100:.1f}%" if real_provider else "n/a (mock provider)"
+    print(f"{'2. Evidence-valid Rate':<32} | {evidence_display}")
     if variance_enabled:
         print(
             f"{'3. Essays within 0.5 across criteria':<32} | {metrics_summary['run_to_run_variance']['share_all_criteria_within_0_5']:.1%}"
         )
     else:
-        print(f"{'3. Run-to-run Variance':<32} | skipped")
+        variance_display = "skipped" if real_provider else "n/a (mock provider)"
+        print(f"{'3. Run-to-run Variance':<32} | {variance_display}")
     print(f"{'4. Guardrail Pass Rate':<32} | {guardrail_rate * 100:.1f}%")
     print(
         f"{'MAE':<32} | {mae:.4f}"
@@ -208,6 +319,32 @@ def run_evals(provider: str = "mock", variance: bool = False, runs: int = 3) -> 
         json.dump(metrics_summary, f, indent=2)
 
     print(f"Evaluation report written to: {output_path}\n")
+    if real_provider:
+        debug_path = results_dir / "day6_evidence_debug.json"
+        debug_path.write_text(
+            json.dumps(
+                {
+                    "timestamp": datetime.now(UTC).isoformat(),
+                    "provider": provider,
+                    "status": "completed",
+                    "sample_count": len(essays),
+                    "evidence_valid_rate": round(avg_evidence_rate, 4),
+                    "failed_quote_count": len(failed_quotes),
+                    "failed_quotes": failed_quotes,
+                },
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+        for failure in failed_quotes:
+            print(
+                "Evidence mismatch — "
+                f"essay_id={failure['essay_id']} "
+                f"criterion={failure['criterion']} "
+                f"quote={failure['quote']!r} "
+                f"closest_substring={failure['closest_substring']!r}"
+            )
+        print(f"Evidence debug report written to: {debug_path}")
     return metrics_summary
 
 
@@ -223,12 +360,29 @@ def main() -> None:
         "--variance", action="store_true", help="Repeat each essay to measure score variance"
     )
     parser.add_argument("--runs", type=int, default=3, help="Runs per essay for variance analysis")
+    parser.add_argument("--limit", type=int, help="Evaluate only the first N synthetic essays.")
+    parser.add_argument(
+        "--sleep-between-calls",
+        type=float,
+        default=0.0,
+        help="Seconds to wait between provider calls.",
+    )
     args = parser.parse_args()
     if args.runs < 2:
         parser.error("--runs must be at least 2")
     if args.provider == "real" and args.variance and args.runs != 3:
         parser.error("--provider real --variance requires exactly --runs 3")
-    run_evals(args.provider, variance=args.variance, runs=args.runs)
+    if args.limit is not None and args.limit < 1:
+        parser.error("--limit must be at least 1")
+    if args.sleep_between_calls < 0:
+        parser.error("--sleep-between-calls must be non-negative")
+    run_evals(
+        args.provider,
+        variance=args.variance,
+        runs=args.runs,
+        limit=args.limit,
+        sleep_between_calls=args.sleep_between_calls,
+    )
 
 
 if __name__ == "__main__":

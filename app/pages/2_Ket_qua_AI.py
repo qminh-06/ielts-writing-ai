@@ -4,8 +4,9 @@ from collections import defaultdict
 
 import streamlit as st
 
-from app.ui_helpers import select_essay
+from app.ui_helpers import format_grading_error, select_essay
 from ielts_ai.services.grading_service import (
+    GradingInProgressError,
     get_essay_details,
     get_latest_grading_result,
     start_grading,
@@ -13,6 +14,31 @@ from ielts_ai.services.grading_service import (
 
 st.set_page_config(page_title="Kết quả AI - IELTS AI", page_icon="📊", layout="wide")
 st.header("📊 Bước 2: Kết quả đánh giá từ AI")
+
+
+def _run_grading(essay_id: int) -> None:
+    busy_key = f"grading_busy_{essay_id}"
+    error_key = f"grading_error_{essay_id}"
+    if st.session_state.get(busy_key, False):
+        st.warning("Bài viết này đang được chấm; yêu cầu thứ hai đã được bỏ qua.")
+        return
+    st.session_state[busy_key] = True
+    try:
+        with st.spinner("AI đang truy xuất rubric và phân tích bài viết..."):
+            result = start_grading(essay_id)
+        if result.get("errors"):
+            st.session_state[error_key] = "\n".join(result["errors"])
+        else:
+            st.session_state.pop(error_key, None)
+            st.success("Chấm điểm thành công!")
+    except GradingInProgressError:
+        st.session_state[error_key] = "Bài viết này đang được chấm; yêu cầu thứ hai đã được bỏ qua."
+    except (ValueError, LookupError) as error:
+        st.session_state[error_key] = str(error)
+    finally:
+        st.session_state[busy_key] = False
+    st.rerun()
+
 
 selected_id = select_essay("Chọn mã bài viết cần xem")
 if selected_id is None:
@@ -30,30 +56,32 @@ st.caption(
 
 # 1. Error state with Retry button
 if current_status == "grading_failed":
-    st.error("⚠️ Quá trình chấm bài bằng AI thất bại hoặc gặp lỗi kết nối/rubric index.")
-    if st.button("🔄 Thử chấm lại (Retry Grading)", type="primary"):
-        with st.spinner("Đang tiến hành chấm lại bài viết..."):
-            res_retry = start_grading(selected_id)
-            if res_retry.get("errors"):
-                for err in res_retry["errors"]:
-                    st.error(err)
-            else:
-                st.success("Chấm lại thành công!")
-                st.rerun()
+    failure = st.session_state.pop(f"grading_error_{selected_id}", "")
+    st.error(
+        format_grading_error(failure)
+        if failure
+        else "Quá trình chấm bài thất bại. Kiểm tra cấu hình rồi thử chấm lại."
+    )
+    if st.button(
+        "🔄 Thử chấm lại (Retry Grading)",
+        type="primary",
+        disabled=st.session_state.get(f"grading_busy_{selected_id}", False),
+    ):
+        _run_grading(selected_id)
     st.stop()
 
 # 2. Pending state with Start button
 if current_status == "pending":
     st.info("Bài viết đang ở trạng thái chờ chấm điểm.")
-    if st.button("🚀 Bắt đầu chấm điểm với AI", type="primary"):
-        with st.spinner("AI đang truy xuất rubric và phân tích bài viết..."):
-            res_grade = start_grading(selected_id)
-            if res_grade.get("errors"):
-                for err in res_grade["errors"]:
-                    st.error(err)
-            else:
-                st.success("Chấm điểm thành công!")
-                st.rerun()
+    failure = st.session_state.pop(f"grading_error_{selected_id}", "")
+    if failure:
+        st.error(format_grading_error(failure))
+    if st.button(
+        "🚀 Bắt đầu chấm điểm với AI",
+        type="primary",
+        disabled=st.session_state.get(f"grading_busy_{selected_id}", False),
+    ):
+        _run_grading(selected_id)
     st.stop()
 
 # 3. Finished state (ai_done, reviewing, approved, emailed)

@@ -85,3 +85,19 @@ The email sender is never called by the AI workflow. The examiner must approve t
 explicitly request delivery. A `sending` row is claimed under a SQLite write transaction before
 delivery; a successful attempt updates the email and essay to `sent`/`emailed` atomically. Failed
 attempts are recorded as `failed`, leave the essay `approved`, and allow a deliberate retry.
+
+## Day 6 stabilization details
+
+The Gemini client uses `LLM_TIMEOUT_SECONDS`, `LLM_MAX_ATTEMPTS`, and
+`LLM_MAX_OUTPUT_TOKENS`. HTTP 429 and 5xx failures use bounded exponential backoff; the
+`llm_calls.retries` field records retries for each call. If the optional thinking budget is rejected
+as unsupported, the client logs that fact and retries without the setting. Provider errors stored in
+logs are sanitized.
+
+Evidence checks normalize Unicode compatibility forms, common smart quotes/dashes, case and
+whitespace. Ellipsis-separated evidence is checked as ordered fragments. Invalid evidence after the
+single graph retry remains in the immutable AI result with a warning; the retry prompt identifies
+the exact quotes that were missing.
+
+SQLite connections set a 5-second busy timeout and use WAL mode to reduce local writer contention.
+This remains a local/single-user design, not a distributed multi-user database.

@@ -2,6 +2,7 @@
 
 import json
 import logging
+import threading
 from datetime import UTC, datetime
 from typing import Any
 
@@ -26,6 +27,7 @@ from ielts_ai.db.repo import (
 )
 from ielts_ai.guardrails.injection import detect_injection
 from ielts_ai.guardrails.output_checks import evidence_in_essay, validate_output
+from ielts_ai.llm.base import LLMProviderError
 from ielts_ai.llm.client import get_llm_client
 from ielts_ai.observability.call_logger import log_call
 from ielts_ai.rag.retriever import search_rubric
@@ -40,6 +42,9 @@ from ielts_ai.schemas import (
 from ielts_ai.services.email_service import EmailSendError, send_email
 
 logger = logging.getLogger(__name__)
+
+_regrade_locks: dict[int, threading.Lock] = {}
+_regrade_locks_guard = threading.Lock()
 
 
 class ReviewValidationError(ValueError):
@@ -107,6 +112,19 @@ def save_examiner_review(decision: ReviewDecision) -> int | GradingResult:
 
 def request_regrade(essay_id: int, criterion: Criterion, feedback: str) -> GradingResult:
     """Re-grade exactly one criterion and persist an immutable next AI version."""
+    with _regrade_locks_guard:
+        lock = _regrade_locks.setdefault(essay_id, threading.Lock())
+    if not lock.acquire(blocking=False):
+        logger.warning("Duplicate re-grade request ignored for essay %s.", essay_id)
+        raise ReviewValidationError(f"Re-grade is already in progress for essay {essay_id}.")
+    try:
+        return _request_regrade(essay_id, criterion, feedback)
+    finally:
+        lock.release()
+
+
+def _request_regrade(essay_id: int, criterion: Criterion, feedback: str) -> GradingResult:
+    """Run one re-grade while the caller owns the per-essay lock."""
     essay, versions = _editable_essay(essay_id)
     try:
         criterion = Criterion(criterion)
@@ -114,6 +132,9 @@ def request_regrade(essay_id: int, criterion: Criterion, feedback: str) -> Gradi
         raise ReviewValidationError("Criterion must be one of TR, CC, LR, or GRA.") from error
     clean_feedback = feedback.strip()
     if not 10 <= len(clean_feedback) <= 1000:
+        logger.warning(
+            "Re-grade feedback rejected for essay %s because its length is invalid.", essay_id
+        )
         raise ReviewValidationError("Examiner feedback must be 10-1000 characters after trimming.")
 
     previous = GradingResult.model_validate_json(versions[0]["result_json"])
@@ -140,8 +161,11 @@ def request_regrade(essay_id: int, criterion: Criterion, feedback: str) -> Gradi
                 version=previous.version + 1,
                 previous_score=old_score,
             )
-        except Exception:
-            raise
+        except (LLMProviderError, TimeoutError, ValueError) as error:
+            logger.error("Re-grade failed for essay %s (%s).", essay_id, type(error).__name__)
+            raise ReviewValidationError(
+                "Chấm lại thất bại do lỗi mô hình hoặc dữ liệu trả về. Hãy thử lại."
+            ) from None
         if not isinstance(result, CriterionScore):
             raise ReviewValidationError(
                 "Re-grade provider did not return a single criterion score."
