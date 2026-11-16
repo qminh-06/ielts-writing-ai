@@ -11,6 +11,7 @@ class Settings(BaseSettings):
     llm_api_key: str = Field(default="", description="API key for real LLM provider")
     llm_model: str = Field(default="", description="Model name for real LLM provider")
     llm_timeout_seconds: float = Field(default=60, gt=0)
+    llm_min_interval_seconds: float = Field(default=5, ge=0)
     llm_max_attempts: int = Field(default=3, ge=1)
     llm_max_output_tokens: int = Field(default=2000, ge=1)
     llm_thinking_budget: int | None = Field(default=None, ge=0)

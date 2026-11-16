@@ -41,6 +41,7 @@ def _configured_grading(
     monkeypatch.setenv("LLM_PROVIDER", "real")
     monkeypatch.setenv("LLM_MAX_ATTEMPTS", str(max_attempts))
     monkeypatch.setenv("LLM_TIMEOUT_SECONDS", "1")
+    monkeypatch.setenv("LLM_MIN_INTERVAL_SECONDS", "0")
     monkeypatch.setenv("LLM_MAX_OUTPUT_TOKENS", "1234")
     if thinking_budget is not None:
         monkeypatch.setenv("LLM_THINKING_BUDGET", str(thinking_budget))
@@ -194,3 +195,29 @@ def test_unsupported_thinking_budget_is_logged_and_ignored(
     assert configs[0].thinking_config.thinking_budget == 512
     assert configs[1].thinking_config is None
     assert "LLM_THINKING_BUDGET is unsupported" in caplog.text
+
+
+def test_real_requests_are_spaced_across_client_instances(monkeypatch: pytest.MonkeyPatch) -> None:
+    import ielts_ai.llm.client as llm_client_module
+
+    monkeypatch.setenv("LLM_MIN_INTERVAL_SECONDS", "5")
+    monkeypatch.setattr(llm_client_module, "_next_request_at", 0.0)
+    clock = [0.0]
+    sleeps: list[float] = []
+
+    def fake_sleep(seconds: float) -> None:
+        sleeps.append(seconds)
+        clock[0] += seconds
+
+    monkeypatch.setattr(llm_client_module.time, "monotonic", lambda: clock[0])
+    monkeypatch.setattr(llm_client_module.time, "sleep", fake_sleep)
+    response = _response()
+    google_client = MagicMock()
+    google_client.models.generate_content.return_value = response
+    monkeypatch.setattr("google.genai.Client", MagicMock(return_value=google_client))
+
+    RealLLMClient(api_key="test-key", model="test-model").complete_json("system", "first")
+    RealLLMClient(api_key="test-key", model="test-model").complete_json("system", "second")
+
+    assert google_client.models.generate_content.call_count == 2
+    assert sleeps == [5.0]

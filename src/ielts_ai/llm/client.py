@@ -1,6 +1,7 @@
 """LLM client factory and real client implementation for Gemini."""
 
 import logging
+import threading
 import time
 from typing import Any
 
@@ -9,6 +10,24 @@ from ielts_ai.llm.base import LLMClient, LLMProviderError, LLMResponse
 from ielts_ai.llm.mock import MockLLMClient
 
 logger = logging.getLogger(__name__)
+
+_request_spacing_lock = threading.Lock()
+_next_request_at = 0.0
+
+
+def _wait_for_request_slot(min_interval_seconds: float) -> None:
+    """Space Gemini request starts across all clients in this process."""
+    global _next_request_at
+    if min_interval_seconds <= 0:
+        return
+
+    with _request_spacing_lock:
+        now = time.monotonic()
+        delay = max(0.0, _next_request_at - now)
+        if delay:
+            logger.info("Waiting %.2f seconds to respect the Gemini request interval.", delay)
+            time.sleep(delay)
+        _next_request_at = time.monotonic() + min_interval_seconds
 
 
 class RealLLMClient:
@@ -110,6 +129,7 @@ class RealLLMClient:
                     )
                 config = types.GenerateContentConfig(**config_values)
                 try:
+                    _wait_for_request_slot(self._settings.llm_min_interval_seconds)
                     response = client.models.generate_content(
                         model=self._model,
                         contents=user,

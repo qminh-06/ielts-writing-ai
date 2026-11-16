@@ -54,3 +54,9 @@ receive bounded exponential backoff; provider errors are sanitized before loggin
 idempotently adds the optional `thinking_tokens` call-log column.
 **Lý do:** Reduce transient lock errors during overlapping local Streamlit sessions while preserving
 the existing SQLite/no-ORM architecture. This does not claim distributed multi-user support.
+
+## D14: Gemini request spacing
+**Decision:** Real Gemini requests in one application process are started at least
+`LLM_MIN_INTERVAL_SECONDS` apart (default 5 seconds), including retries.
+**Reason:** Reduce the chance of exceeding per-minute provider quotas when local sessions overlap.
+This in-process limiter does not coordinate multiple application processes or machines.
