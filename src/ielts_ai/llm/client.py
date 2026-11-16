@@ -1,6 +1,7 @@
 """LLM client factory and real client implementation for Gemini."""
 
 import logging
+import random
 import threading
 import time
 from typing import Any
@@ -158,7 +159,9 @@ class RealLLMClient:
                             continue
                     if self._is_transient(status) and attempt < self._settings.llm_max_attempts:
                         self.last_attempt_retries += 1
-                        delay = min(2 ** (attempt - 1), 20)
+                        backoff = min(5 * 2 ** (attempt - 1), 20)
+                        jitter = random.uniform(0, min(backoff * 0.2, 20 - backoff))
+                        delay = backoff + jitter
                         logger.warning(
                             "Gemini API returned HTTP %s; retrying attempt %s/%s in %s seconds.",
                             status,

@@ -156,7 +156,7 @@ LLM_MODEL=gemini-3.8-flash
 
 Chọn model mà API key/tài khoản của bạn được phép gọi. Không gửi API key qua chat, không ghi vào source code và không commit `.env`. Ứng dụng gửi prompt và essay tới nhà cung cấp LLM; chỉ dùng dữ liệu bạn được phép chia sẻ. Gemini thật không đồng nghĩa với RAG thật.
 
-Các giới hạn provider có mặc định an toàn trong `.env.example`: `LLM_TIMEOUT_SECONDS=60`, `LLM_MIN_INTERVAL_SECONDS=5`, `LLM_MAX_ATTEMPTS=3`, `LLM_MAX_OUTPUT_TOKENS=2000`. `LLM_MIN_INTERVAL_SECONDS` là khoảng cách tối thiểu giữa thời điểm bắt đầu các request Gemini trong cùng tiến trình; mặc định 5 giây tương đương tối đa khoảng 12 request/phút cho tiến trình đó. Limiter áp dụng cho cả grading, re-grade và retry, nhưng không đồng bộ giữa nhiều tiến trình/máy cùng dùng một API key. Lỗi HTTP 429/5xx được retry với backoff có giới hạn; các lần thử được ghi vào `llm_calls.retries`. `LLM_THINKING_BUDGET` là tùy chọn và sẽ bị bỏ qua có log nếu model không hỗ trợ.
+Các giới hạn provider có mặc định an toàn trong `.env.example`: `LLM_TIMEOUT_SECONDS=60`, `LLM_MIN_INTERVAL_SECONDS=5`, `LLM_MAX_ATTEMPTS=3`, `LLM_MAX_OUTPUT_TOKENS=2000`. `LLM_MIN_INTERVAL_SECONDS` là khoảng cách tối thiểu giữa thời điểm bắt đầu các request Gemini trong cùng tiến trình; mặc định 5 giây tương đương tối đa khoảng 12 request/phút cho tiến trình đó. Limiter áp dụng cho cả grading, re-grade và retry, nhưng không đồng bộ giữa nhiều tiến trình/máy cùng dùng một API key. Lỗi HTTP 429/5xx được retry với exponential backoff bắt đầu khoảng 5 giây, tăng dần tới tối đa 20 giây và thêm jitter để tránh nhiều phiên retry cùng lúc; các lần thử được ghi vào `llm_calls.retries`. `LLM_THINKING_BUDGET` là tùy chọn và sẽ bị bỏ qua có log nếu model không hỗ trợ.
 
 ## Dùng ChromaDB thay mock RAG
 

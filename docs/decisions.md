@@ -60,3 +60,8 @@ the existing SQLite/no-ORM architecture. This does not claim distributed multi-u
 `LLM_MIN_INTERVAL_SECONDS` apart (default 5 seconds), including retries.
 **Reason:** Reduce the chance of exceeding per-minute provider quotas when local sessions overlap.
 This in-process limiter does not coordinate multiple application processes or machines.
+
+## D15: Transient API retry backoff
+**Decision:** HTTP 429/5xx retries use exponential backoff starting at 5 seconds, capped at
+20 seconds per wait, with bounded jitter.
+**Reason:** Avoid rapid retries and reduce synchronized retry bursts across local sessions.

@@ -34,6 +34,7 @@ def _configured_grading(
     *,
     max_attempts: int = 3,
     thinking_budget: int | None = None,
+    jitter_at_upper_bound: bool = False,
 ) -> tuple[dict, str, MagicMock, list[float]]:
     db_path = str(tmp_path / "llm.db")
     init_db(db_path)
@@ -55,6 +56,10 @@ def _configured_grading(
     monkeypatch.setattr("google.genai.Client", google_client_factory)
     sleeps: list[float] = []
     monkeypatch.setattr("ielts_ai.llm.client.time.sleep", sleeps.append)
+    monkeypatch.setattr(
+        "ielts_ai.llm.client.random.uniform",
+        lambda lower, upper: upper if jitter_at_upper_bound else lower,
+    )
     client = RealLLMClient(api_key="secret-test-api-key", model="test-model")
     monkeypatch.setattr("ielts_ai.agent.graph.get_llm_client", lambda: client)
     result = start_grading(essay_id)
@@ -87,7 +92,7 @@ def test_real_provider_retries_429_and_5xx_and_records_limits_and_tokens(
     )
     assert result["status"] == "ai_done"
     assert client.models.generate_content.call_count == 3
-    assert sleeps == [1, 2]
+    assert sleeps == [5, 10]
     assert grade_call["status"] == "ok"
     assert grade_call["retries"] == 2
     assert grade_call["input_tokens"] == 31
@@ -119,12 +124,39 @@ def test_http_429_after_max_attempts_fails_with_safe_log_and_status(
     )
     assert result["status"] == "grading_failed"
     assert client.models.generate_content.call_count == 3
-    assert sleeps == [1, 2]
+    assert sleeps == [5, 10]
     assert grade_call["status"] == "error"
     assert grade_call["retries"] == 2
     assert "HTTP 429" in grade_call["error"]
     assert "secret-test-api-key" not in grade_call["error"]
     assert "secret-test-api-key" not in str(result["errors"])
+
+
+def test_retry_backoff_adds_jitter_and_caps_each_wait_at_twenty_seconds(
+    tmp_path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    result, db_path, clients, sleeps = _configured_grading(
+        tmp_path,
+        monkeypatch,
+        [
+            ProviderHttpError(429),
+            ProviderHttpError(503),
+            ProviderHttpError(429),
+            _response(),
+        ],
+        max_attempts=4,
+        jitter_at_upper_bound=True,
+    )
+    client, _ = clients
+
+    grade_call = next(
+        call for call in list_llm_calls(db_path, result["essay_id"]) if call["step"] == "grade"
+    )
+    assert result["status"] == "ai_done"
+    assert client.models.generate_content.call_count == 4
+    assert sleeps == [6, 12, 20]
+    assert max(sleeps) <= 20
+    assert grade_call["retries"] == 3
 
 
 def test_provider_timeout_fails_without_retry_and_is_logged(
