@@ -8,10 +8,10 @@ def test_prompt_requires_verbatim_evidence_including_candidate_errors() -> None:
         "Evidence quotes MUST be copied EXACTLY from the essay, including the candidate's "
         "grammar and spelling mistakes. Never correct, paraphrase, or alter a quote."
     )
-    assert PROMPT_VERSION == "1.2.0"
+    assert PROMPT_VERSION == "1.3.0"
     assert exact_instruction in GRADING_SYSTEM_PROMPT
 
-    system, _ = build_regrade_prompt(
+    system, user = build_regrade_prompt(
         prompt_text="Discuss education.",
         essay_text="Students learns together.",
         rubric_context="",
@@ -19,3 +19,8 @@ def test_prompt_requires_verbatim_evidence_including_candidate_errors() -> None:
         examiner_feedback="Please reconsider this criterion.",
     )
     assert exact_instruction in system
+    assert '"criterion": "GRA"' in user
+    assert (
+        "Your reply must be exactly this single JSON object with no wrapper and no other criteria"
+        in user
+    )

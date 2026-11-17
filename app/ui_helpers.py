@@ -21,6 +21,12 @@ def format_grading_error(error: str) -> str:
         )
     if "jsondecodeerror" in lowered or "invalid json" in lowered:
         return "Mô hình trả kết quả không đúng định dạng sau các lần thử. Bạn có thể thử lại."
+    if (
+        "regradefailederror" in lowered
+        or "không khớp schema" in lowered
+        or "validationerror" in lowered
+    ):
+        return "Chấm lại thất bại do phản hồi từ mô hình không đúng định dạng schema. Chi tiết xem tại trang Logs."
     return f"Chấm điểm thất bại. Bạn có thể thử lại. Chi tiết an toàn: {error}"
 
 

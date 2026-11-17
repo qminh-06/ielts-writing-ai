@@ -51,6 +51,17 @@ class ReviewValidationError(ValueError):
     """A review or re-grade request violates examiner workflow rules."""
 
 
+class RegradeFailedError(ReviewValidationError):
+    """Raised when a single-criterion re-grade fails, carrying a Vietnamese user message."""
+
+    def __init__(
+        self,
+        message: str = "Chấm lại thất bại do lỗi mô hình hoặc dữ liệu trả về không khớp schema. Chi tiết xem tại trang Logs.",
+    ) -> None:
+        super().__init__(message)
+        self.user_message = message
+
+
 def final_overall_band(final_bands: dict[Criterion, float]) -> float:
     """Compute examiner overall using the same half-up-to-0.5 rule as AI results."""
     if set(final_bands) != set(Criterion):
@@ -163,15 +174,17 @@ def _request_regrade(essay_id: int, criterion: Criterion, feedback: str) -> Grad
             )
         except (LLMProviderError, TimeoutError, ValueError) as error:
             logger.error("Re-grade failed for essay %s (%s).", essay_id, type(error).__name__)
-            raise ReviewValidationError(
-                "Chấm lại thất bại do lỗi mô hình hoặc dữ liệu trả về. Hãy thử lại."
+            raise RegradeFailedError(
+                "Chấm lại thất bại do lỗi mô hình hoặc dữ liệu trả về không khớp schema. Chi tiết xem tại trang Logs."
             ) from None
         if not isinstance(result, CriterionScore):
-            raise ReviewValidationError(
-                "Re-grade provider did not return a single criterion score."
+            raise RegradeFailedError(
+                "Re-grade provider did not return a single criterion score. Chi tiết xem tại trang Logs."
             )
         if result.criterion != criterion:
-            raise ReviewValidationError("Re-grade provider returned the wrong criterion.")
+            raise RegradeFailedError(
+                "Re-grade provider returned the wrong criterion. Chi tiết xem tại trang Logs."
+            )
         revised = result
         if all(evidence_in_essay(quote, essay["essay_text"]) for quote in revised.evidence):
             break

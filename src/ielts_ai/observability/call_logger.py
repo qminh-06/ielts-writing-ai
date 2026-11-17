@@ -13,6 +13,7 @@ import time
 from collections.abc import Generator
 from contextlib import contextmanager
 from json import JSONDecodeError
+from typing import Any
 
 from ielts_ai.llm.base import LLMProviderError
 
@@ -22,12 +23,33 @@ logger = logging.getLogger(__name__)
 def _safe_call_error(error: Exception) -> str:
     """Keep model output, candidate data, and credentials out of persistent logs."""
     if isinstance(error, LLMProviderError):
-        return str(error)
+        return str(error)[:2000]
     if isinstance(error, JSONDecodeError):
         return "Provider returned invalid JSON."
     if type(error).__name__ == "ValidationError":
-        return "Provider response did not match the grading schema."
-    return f"Call failed ({type(error).__name__})."
+        raw_text = getattr(error, "raw_model_text", None) or ""
+        raw_snippet = raw_text[:800]
+        # Extract sanitized errors: (loc, type, msg) without input values
+        errors_summary: list[dict[str, Any]] = []
+        if hasattr(error, "errors"):
+            try:
+                for err in error.errors():
+                    loc = ".".join(str(p) for p in err.get("loc", ()))
+                    errors_summary.append(
+                        {
+                            "loc": loc,
+                            "type": str(err.get("type", "")),
+                            "msg": str(err.get("msg", "")),
+                        }
+                    )
+            except Exception:
+                pass
+        details = (
+            f"Provider response did not match the grading schema. "
+            f"Validation errors: {errors_summary}. Raw snippet: {raw_snippet!r}"
+        )
+        return details[:2000]
+    return f"Call failed ({type(error).__name__})."[:2000]
 
 
 class CallContext:

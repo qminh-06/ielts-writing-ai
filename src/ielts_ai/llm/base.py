@@ -1,7 +1,7 @@
 """LLM client protocol and response type."""
 
 from dataclasses import dataclass
-from typing import Protocol, runtime_checkable
+from typing import Any, Protocol, runtime_checkable
 
 
 class LLMProviderError(Exception):
@@ -31,6 +31,7 @@ class LLMClient(Protocol):
         user: str,
         *,
         temperature: float = 0.0,
+        response_schema: dict[str, Any] | None = None,
     ) -> LLMResponse:
         """Send a prompt and return a JSON-formatted response.
 

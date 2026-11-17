@@ -12,6 +12,9 @@ class Settings(BaseSettings):
     llm_model: str = Field(default="", description="Model name for real LLM provider")
     llm_timeout_seconds: float = Field(default=60, gt=0)
     llm_max_attempts: int = Field(default=3, ge=1)
+    llm_max_validation_attempts: int = Field(
+        default=2, ge=0, description="Max validation retries when model output fails validation"
+    )
     llm_max_output_tokens: int = Field(default=2000, ge=1)
     llm_thinking_budget: int | None = Field(default=None, ge=0)
     use_mock_rag: bool = Field(

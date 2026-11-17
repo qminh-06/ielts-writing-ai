@@ -4,7 +4,7 @@ import re
 from collections import defaultdict
 from typing import Any
 
-PROMPT_VERSION = "1.2.0"
+PROMPT_VERSION = "1.3.0"
 
 
 def _escape_closing_delimiters(text: str) -> str:
@@ -89,8 +89,15 @@ Output the evaluation strictly as valid JSON adhering to the specified schema.
 """
 
 REGRADE_USER_TEMPLATE = """\
-Re-evaluate ONLY criterion {criterion}. Return a JSON object with exactly these fields:
-{{"criterion": "{criterion}", "band": 6.5, "comment": "...", "evidence": ["verbatim quote"]}}
+Re-evaluate ONLY criterion {criterion}. Your reply must be exactly this single JSON object with no wrapper and no other criteria:
+```json
+{{
+  "criterion": "{criterion}",
+  "band": 6.5,
+  "comment": "Concise explanation for {criterion}.",
+  "evidence": ["verbatim quote from essay"]
+}}
+```
 
 Previous score for {criterion}: {previous_score}
 Previous examiner-facing comment: {previous_comment}
