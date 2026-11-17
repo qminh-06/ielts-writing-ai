@@ -6,7 +6,7 @@ Hệ thống hỗ trợ giám khảo chấm điểm và đánh giá bài viết 
 
 ---
 
-## 🏗️ Kiến trúc luồng xử lý
+## Kiến trúc luồng xử lý
 
 ```mermaid
 flowchart LR
@@ -25,7 +25,7 @@ flowchart LR
 
 ---
 
-## ⚡ Hướng dẫn cài đặt chi tiết (Setup Guide)
+## Hướng dẫn cài đặt chi tiết (Setup Guide)
 
 Hệ thống yêu cầu **Python 3.11**. Không cần cài đặt Docker hay FastAPI.
 
@@ -50,8 +50,6 @@ python -m pip install -U pip
 python -m pip install -r requirements.txt
 python -m pip install -e .
 ```
-
-*Lưu ý trên Windows:* Nếu lệnh `python` mở Microsoft Store, hãy dùng `py -3.11 -m venv .venv`.
 
 #### Trên macOS / Linux:
 ```bash
@@ -94,7 +92,7 @@ Cập nhật trong file `.env`:
 ```dotenv
 LLM_PROVIDER=real
 LLM_API_KEY=your_gemini_api_key_here
-LLM_MODEL=gemini-2.5-flash
+LLM_MODEL=gemini-3.5-flash-lite
 ```
 
 #### Khi muốn chuyển sang ChromaDB RAG thật:
@@ -130,7 +128,7 @@ python scripts/init_db.py
 
 ---
 
-## 🚀 Khởi chạy ứng dụng (Run App)
+## Khởi chạy ứng dụng (Run App)
 
 Đảm bảo terminal đang ở thư mục gốc repo và đã kích hoạt môi trường ảo `.venv`:
 
@@ -149,7 +147,7 @@ Mở trình duyệt tại: `http://localhost:8501`
 
 ---
 
-## 🧪 Kiểm thử, Lint & Đánh giá (Evals)
+## Kiểm thử, Lint & Đánh giá (Evals)
 
 ```powershell
 # Chạy bộ test tự động (65 offline tests hoàn toàn không tốn quota/mạng)
@@ -171,7 +169,7 @@ python evals/run_evals.py
 
 ---
 
-## 📂 Cấu trúc thư mục chính
+## Cấu trúc thư mục chính
 
 ```text
 ielts-writing-ai/
@@ -194,6 +192,6 @@ ielts-writing-ai/
 
 ---
 
-## 📌 Lưu ý trước buổi Demo
+## Lưu ý trước buổi Demo
 - Khuyến nghị sử dụng cấu hình mặc định (`LLM_PROVIDER=mock`, `USE_MOCK_RAG=true`, `EMAIL_MODE=file`) khi thuyết trình demo trên lớp để đảm bảo tốc độ tức thì (~3-5ms), mượt mà và không lo rủi ro nghẽn mạng hay lỗi quota từ API bên thứ ba.
-- Tài liệu kiến trúc và 7 quyết định thiết kế chi tiết xem tại `docs/architecture.md` và `docs/decisions.md`.
+- Tài liệu kiến trúc và quyết định thiết kế chi tiết xem tại `docs/architecture.md` và `docs/decisions.md`.
