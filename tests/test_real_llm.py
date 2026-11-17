@@ -44,12 +44,22 @@ def test_real_llm_client_mocked_gemini() -> None:
         mock_client_cls.return_value = mock_instance
 
         client = RealLLMClient(api_key="fake-test-key", model="gemini-3.8-flash")
-        resp = client.complete_json("system prompt", "user prompt", temperature=0.0)
+        resp = client.complete_json(
+            "system prompt",
+            "user prompt",
+            temperature=0.0,
+            response_schema={"type": "OBJECT"},
+        )
 
         assert resp.text == '{"criteria": [], "warnings": []}'
         assert resp.input_tokens == 120
         assert resp.output_tokens == 80
         assert resp.model == "gemini-3.8-flash"
+
+        # Verify response_schema reached GenerateContentConfig
+        call_kwargs = mock_instance.models.generate_content.call_args.kwargs
+        assert call_kwargs["config"].response_schema == {"type": "OBJECT"}
+        assert call_kwargs["config"].response_mime_type == "application/json"
 
 
 @pytest.mark.integration

@@ -7,6 +7,7 @@ import streamlit as st
 from app.ui_helpers import select_essay
 from ielts_ai.services.review_service import (
     Criterion,
+    RegradeFailedError,
     ReviewDecision,
     ReviewValidationError,
     final_overall_band,
@@ -188,6 +189,9 @@ with st.expander("Chấm lại một tiêu chí"):
                 )
                 st.session_state[busy_key] = False
                 st.rerun()
+            except RegradeFailedError as error:
+                st.session_state[busy_key] = False
+                st.error(f"{error.user_message}")
             except (
                 ReviewValidationError,
                 ValueError,

@@ -4,6 +4,7 @@ import json
 import logging
 import re
 from pathlib import Path
+from typing import Any
 
 from ielts_ai.llm.base import LLMResponse
 
@@ -30,6 +31,7 @@ class MockLLMClient:
         user: str,
         *,
         temperature: float = 0.0,
+        response_schema: dict[str, Any] | None = None,
     ) -> LLMResponse:
         """Return mock grading result JSON regardless of input.
 

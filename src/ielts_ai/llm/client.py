@@ -68,6 +68,7 @@ class RealLLMClient:
         user: str,
         *,
         temperature: float = 0.0,
+        response_schema: dict[str, Any] | None = None,
     ) -> LLMResponse:
         """Call Gemini API and return a JSON-formatted response.
 
@@ -75,6 +76,7 @@ class RealLLMClient:
             system: System prompt instruction.
             user: User prompt instruction.
             temperature: Sampling temperature (default 0.0).
+            response_schema: Optional JSON schema dictionary to constrain model output.
 
         Returns:
             LLMResponse containing response text, token counts, and model name.
@@ -96,6 +98,7 @@ class RealLLMClient:
                 http_options=types.HttpOptions(timeout=round(self._timeout * 1000)),
             )
             use_thinking_budget = self._settings.llm_thinking_budget is not None
+            use_schema = response_schema is not None
             self.last_attempt_retries = 0
             for attempt in range(1, self._settings.llm_max_attempts + 1):
                 config_values: dict[str, Any] = {
@@ -104,11 +107,32 @@ class RealLLMClient:
                     "response_mime_type": "application/json",
                     "max_output_tokens": self._settings.llm_max_output_tokens,
                 }
+                if use_schema:
+                    try:
+                        config_values["response_schema"] = response_schema
+                    except Exception as schema_err:
+                        logger.warning(
+                            "Failed to configure response_schema (%s); falling back without schema.",
+                            schema_err,
+                        )
+                        use_schema = False
                 if use_thinking_budget:
                     config_values["thinking_config"] = types.ThinkingConfig(
                         thinking_budget=self._settings.llm_thinking_budget
                     )
-                config = types.GenerateContentConfig(**config_values)
+                try:
+                    config = types.GenerateContentConfig(**config_values)
+                except Exception as cfg_err:
+                    if use_schema:
+                        logger.warning(
+                            "GenerateContentConfig rejected response_schema (%s); falling back without it.",
+                            cfg_err,
+                        )
+                        use_schema = False
+                        config_values.pop("response_schema", None)
+                        config = types.GenerateContentConfig(**config_values)
+                    else:
+                        raise cfg_err
                 try:
                     response = client.models.generate_content(
                         model=self._model,
@@ -136,6 +160,12 @@ class RealLLMClient:
                                 "retrying without it."
                             )
                             continue
+                    if use_schema and status == 400:
+                        logger.warning(
+                            "Gemini API returned 400 with response_schema; falling back without schema."
+                        )
+                        use_schema = False
+                        continue
                     if self._is_transient(status) and attempt < self._settings.llm_max_attempts:
                         self.last_attempt_retries += 1
                         delay = min(2 ** (attempt - 1), 20)
